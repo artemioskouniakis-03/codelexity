@@ -1,7 +1,8 @@
+from pydoc import resolve
 from pathlib import Path
 import re
 import ast
-import importlib
+import dis
 
 
 MULTILINE_COMMENTS = re.compile(r"^[\t ]*\"\"\".*?\"\"\"|^[\t ]*'''.*?'''", re.DOTALL | re.MULTILINE)
@@ -22,28 +23,24 @@ def functions(string):
             fns.append(ast.get_source_segment(string, node))
     return fns
 
-def imports(string, relative_to = None):
-    tree = ast.parse(string)
-    out = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                path = importlib.util.find_spec(alias.name).origin
-                out.add(path)
-        elif isinstance(node, ast.ImportFrom):
-            path = importlib.util.find_spec(node.module).origin
-            out.add(path)
-    if relative_to:
-       out = sorted([path for path in out if Path(path).is_relative_to(relative_to)])
-    return sorted(out)
+def _import_names(code):
+    for name, level, fromlist in dis._find_imports(code):
+        yield name
+    for const in code.co_consts:
+        if isinstance(const, type(code)):
+            yield from _import_names(const)
+
+def imports(path: Path, relative_to = None):
+    code = compile(path.read_text(), str(path), "exec")
+    return sorted(set(_import_names(code)))
 
 def analyze_module(path, relative_to = None):
+    print(f"--{path}")
     pth = Path(path).resolve()
-    print(path, pth)
     st = pth.open().read()
     total, empty, comments = len(st.split('\n')), len(empty_lines(st)), len(comments_and_docstrings(st))
     return {
-            "imports" : imports(st, relative_to),
+            "imports" : imports(pth, relative_to),
             "total_lines" : total,
             "empty_lines" : empty,
             "comments" : comments,
@@ -53,8 +50,9 @@ def analyze_module(path, relative_to = None):
 
 def analyze_package(path):
     module_dict = {}
-    for p in Path(path).rglob("*.py"):
-        print(p)
-        module_dict[p] = analyze_module(p, relative_to=path)
+    resolved_path = Path(path).resolve()
+    print(resolved_path)
+    for p in resolved_path.rglob("*.py"):
+        module_dict[p.as_posix()] = analyze_module(p, relative_to=resolved_path)
     return module_dict
 
