@@ -3,6 +3,8 @@ from pathlib import Path
 import re
 import ast
 import dis
+import sys
+import importlib.machinery
 
 
 MULTILINE_COMMENTS = re.compile(r"^[\t ]*\"\"\".*?\"\"\"|^[\t ]*'''.*?'''", re.DOTALL | re.MULTILINE)
@@ -32,10 +34,13 @@ def _import_names(code):
 
 def imports(path: Path, relative_to = None):
     code = compile(path.read_text(), str(path), "exec")
-    return sorted(set(_import_names(code)))
+    root = Path(relative_to) if relative_to else path.parent
+    search = sys.path + [str(root), *(str(d) for d in root.rglob("*") if d.is_dir())]
+    names = {n.split(".")[0] for n in _import_names(code)} - set(sys.builtin_module_names)
+    specs = (importlib.machinery.PathFinder.find_spec(n, search) for n in names)
+    return sorted({s.origin for s in specs if s and s.origin})
 
 def analyze_module(path, relative_to = None):
-    print(f"--{path}")
     pth = Path(path).resolve()
     st = pth.open().read()
     total, empty, comments = len(st.split('\n')), len(empty_lines(st)), len(comments_and_docstrings(st))
@@ -50,7 +55,7 @@ def analyze_module(path, relative_to = None):
 
 def analyze_package(path):
     module_dict = {}
-    resolved_path = Path(path).resolve()
+    resolved_path = Path(path)
     print(resolved_path)
     for p in resolved_path.rglob("*.py"):
         module_dict[p.as_posix()] = analyze_module(p, relative_to=resolved_path)
