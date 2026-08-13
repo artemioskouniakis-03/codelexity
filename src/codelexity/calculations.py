@@ -32,20 +32,32 @@ def _import_names(code):
         if isinstance(const, type(code)):
             yield from _import_names(const)
 
-def imports(path: Path, relative_to = None):
-    code = compile(path.read_text(), str(path), "exec")
-    root = Path(relative_to) if relative_to else path.parent
-    search = sys.path + [str(root), *(str(d) for d in root.rglob("*") if d.is_dir())]
-    names = {n.split(".")[0] for n in _import_names(code)} - set(sys.builtin_module_names)
-    specs = (importlib.machinery.PathFinder.find_spec(n, search) for n in names)
-    return sorted({s.origin for s in specs if s and s.origin})
+def _resolve(name, search):
+    """Deepest spec for a dotted name, walking package search locations (never imports anything)."""
+    spec, parts = None, name.split(".")
+    for i in range(len(parts)):
+        locations = spec.submodule_search_locations if spec else search
+        found = locations and importlib.machinery.PathFinder.find_spec(".".join(parts[:i + 1]), locations)
+        if not found:
+            break
+        spec = found
+    return spec
 
-def analyze_module(path, relative_to = None):
+def imports(path: Path, exclude_regex = None):
+    code = compile(path.read_text(), str(path), "exec")
+    root = path.parent
+    search = sys.path + [str(root), *(str(d) for d in root.rglob("*") if d.is_dir())]
+    names = {n for n in _import_names(code) if n.split(".")[0] not in sys.builtin_module_names}
+    specs = (_resolve(n, search) for n in names)
+    imports_sorted = sorted({s.origin for s in specs if s and s.origin})
+    return imports_sorted if not exclude_regex else [i for i in imports_sorted if not re.search(exclude_regex,i)]
+
+def analyze_module(path, exclude_regex = None):
     pth = Path(path).resolve()
     st = pth.open().read()
     total, empty, comments = len(st.split('\n')), len(empty_lines(st)), len(comments_and_docstrings(st))
     return {
-            "imports" : imports(pth, relative_to),
+            "imports" : imports(pth, exclude_regex=exclude_regex),
             "total_lines" : total,
             "empty_lines" : empty,
             "comments" : comments,
@@ -53,11 +65,11 @@ def analyze_module(path, relative_to = None):
             "contained_function_length" : [len(f.split('\n')) - len(empty_lines(f)) - len(comments_and_docstrings(f)) for f in functions(st)],
             }
 
-def analyze_package(path):
+def analyze_package(path, exclude_regex = None):
     module_dict = {}
     resolved_path = Path(path)
     print(resolved_path)
     for p in resolved_path.rglob("*.py"):
-        module_dict[p.as_posix()] = analyze_module(p, relative_to=resolved_path)
+        module_dict[p.as_posix()] = analyze_module(p, exclude_regex = exclude_regex)
     return module_dict
 
