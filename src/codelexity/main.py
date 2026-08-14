@@ -12,8 +12,11 @@ parser = argparse.ArgumentParser(description="Codelexity helps you measure and v
 parser.add_argument("filepath", help="The path to the code you want to process.")
 parser.add_argument("-of", "--output-file", action="store_true", help=f"Store the codelexity data in a json file `{JSON_NAME}` in the current directory.")
 parser.add_argument("-og", "--output-graph", action="store_true", help=f"Store the codelexity interactive plot in an html file `{HTML_NAME}` in the current directory.")
+parser.add_argument('-i', "--include-only", nargs='+', type=str, default = (),  help="Provide the list of packages/modules to be included.")
+parser.add_argument('-e', "--exclude", nargs='+', type=str, default = (),help="Provide a list of packages/modules to exclude.")
 
 args = parser.parse_args()
+print(args)
 
 
 def main():
@@ -25,7 +28,7 @@ def main():
         raise FileNotFoundError(f"Could not locate: {args.filepath}")
     
     #analyze code
-    data = analyze_package(path)
+    data = analyze_package(path, exclude = args.exclude, include_only=args.include_only)
 
     if args.output_graph:
         create_graph(data, HTML_NAME)

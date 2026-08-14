@@ -5,6 +5,7 @@ import ast
 import dis
 import sys
 import importlib.machinery
+from functools import lru_cache
 
 
 MULTILINE_COMMENTS = re.compile(r"^[\t ]*\"\"\".*?\"\"\"|^[\t ]*'''.*?'''", re.DOTALL | re.MULTILINE)
@@ -26,38 +27,49 @@ def functions(string):
     return fns
 
 def _import_names(code):
+    """Dotted names a code object imports, e.g. `from a.b import c` -> a, a.b, a.b.c."""
     for name, level, fromlist in dis._find_imports(code):
         yield name
+        for item in fromlist or ():
+            if item != "*":
+                yield f"{name}.{item}"
     for const in code.co_consts:
         if isinstance(const, type(code)):
             yield from _import_names(const)
 
 def _resolve(name, search):
-    """Deepest spec for a dotted name, walking package search locations (never imports anything)."""
+    """Deepest importable spec for a dotted name, walking package search
+    locations without importing/executing anything."""
     spec, parts = None, name.split(".")
     for i in range(len(parts)):
         locations = spec.submodule_search_locations if spec else search
-        found = locations and importlib.machinery.PathFinder.find_spec(".".join(parts[:i + 1]), locations)
+        try:
+            found = locations and importlib.machinery.PathFinder.find_spec(".".join(parts[:i + 1]), locations)
+        except KeyError:
+            # ponytail: namespace packages need their own parent in sys.modules
+            # to build a submodule spec; we never import, so treat as unresolved.
+            found = None
         if not found:
             break
         spec = found
     return spec
 
-def imports(path: Path, exclude_regex = None):
+def imports(module_path, root=None):
+    """Full filesystem paths of the local modules `module_path` imports."""
+    path = Path(module_path).resolve()
     code = compile(path.read_text(), str(path), "exec")
-    root = path.parent
+    root = Path(root).resolve() if root else path.parent
     search = sys.path + [str(root), *(str(d) for d in root.rglob("*") if d.is_dir())]
     names = {n for n in _import_names(code) if n.split(".")[0] not in sys.builtin_module_names}
     specs = (_resolve(n, search) for n in names)
-    imports_sorted = sorted({s.origin for s in specs if s and s.origin})
-    return imports_sorted if not exclude_regex else [i for i in imports_sorted if not re.search(exclude_regex,i)]
+    return sorted({s.origin for s in specs if s and s.origin})
 
-def analyze_module(path, exclude_regex = None):
+def analyze_module(path, root=None):
     pth = Path(path).resolve()
     st = pth.open().read()
     total, empty, comments = len(st.split('\n')), len(empty_lines(st)), len(comments_and_docstrings(st))
     return {
-            "imports" : imports(pth, exclude_regex=exclude_regex),
+            "imports" : imports(pth, root),
             "total_lines" : total,
             "empty_lines" : empty,
             "comments" : comments,
@@ -65,11 +77,32 @@ def analyze_module(path, exclude_regex = None):
             "contained_function_length" : sorted([len(f.split('\n')) - len(empty_lines(f)) - len(comments_and_docstrings(f)) for f in functions(st)]),
             }
 
-def analyze_package(path, exclude_regex = None):
+
+def normalized_path_list(path: str):
+    suffixes = Path(path).suffixes
+    name = Path(path).name
+    path_list = path.split("/")[:-1]
+    for suff in suffixes:
+        name = name.replace(suff,"")
+    return path_list + [name]
+
+def is_valid(module_path: str, include_only, exclude):
+    pathlist = normalized_path_list(module_path)
+    included = not include_only or set(pathlist).isdisjoint(set(include_only))
+    excluded = exclude and set(pathlist).isdisjoint(set(exclude))
+    return included and not excluded
+
+def analyze_package(path, exclude = (), include_only = (), max_recursion=25):
     module_dict = {}
     resolved_path = Path(path)
-    print(resolved_path)
     for p in resolved_path.rglob("*.py"):
-        module_dict[p.resolve().as_posix()] = analyze_module(p, exclude_regex = exclude_regex)
+        if not is_valid(p.as_posix(), exclude, include_only):
+            continue
+        module_data = analyze_module(p, root=resolved_path)
+        module_data['imports'] = [imp_mod for imp_mod in module_data['imports'] if is_valid(imp_mod, exclude, include_only)]
+        module_dict[p.resolve().as_posix()] = module_data
+        for imp in set(module_data['imports']).difference(set(module_dict.keys())):
+            module_data = analyze_module(imp, root=resolved_path)
+            module_data['imports'] = [imp_mod for imp_mod in module_data['imports'] if is_valid(imp_mod, exclude, include_only)]
+            module_dict[imp] = module_data
     return module_dict
-

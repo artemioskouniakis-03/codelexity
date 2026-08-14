@@ -2,9 +2,8 @@
 test module docstring
 
 """
-from main import def_line
-from main import ast
 import ast
+from os.path import split
 
 def s(a,b):
     """test function docstring"""
