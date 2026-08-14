@@ -62,7 +62,7 @@ def analyze_module(path, exclude_regex = None):
             "empty_lines" : empty,
             "comments" : comments,
             "code_length": total - empty - comments,
-            "contained_function_length" : [len(f.split('\n')) - len(empty_lines(f)) - len(comments_and_docstrings(f)) for f in functions(st)],
+            "contained_function_length" : sorted([len(f.split('\n')) - len(empty_lines(f)) - len(comments_and_docstrings(f)) for f in functions(st)]),
             }
 
 def analyze_package(path, exclude_regex = None):
@@ -70,6 +70,6 @@ def analyze_package(path, exclude_regex = None):
     resolved_path = Path(path)
     print(resolved_path)
     for p in resolved_path.rglob("*.py"):
-        module_dict[p.as_posix()] = analyze_module(p, exclude_regex = exclude_regex)
+        module_dict[p.resolve().as_posix()] = analyze_module(p, exclude_regex = exclude_regex)
     return module_dict
 
