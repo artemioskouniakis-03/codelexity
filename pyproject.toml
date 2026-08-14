@@ -1,7 +1,21 @@
 [project]
 name = "codelexity"
 version = "0.1.0"
-description = "Add your description here"
+description = "A package that measures code complexity in the age of AI slop"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "networkx>=3.6.1",
+    "pyvis>=0.3.2",
+]
+
+[project.scripts]
+codelexity = "codelexity.main:main"
+
+[tool.uv.sources]
+codelexity = { path = "src", editable = true }
+
+[build-system]
+requires = ["uv_build>=0.10,<0.12"]
+build-backend = "uv_build"
+
