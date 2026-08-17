@@ -3,11 +3,26 @@ import dis
 import importlib.machinery
 import re
 import sys
+from math import log, sin, sqrt
 from pathlib import Path
+
+from codelexity.halstead import halstead_metrics
 
 MULTILINE_COMMENTS = re.compile(r"^[\t ]*\"\"\".*?\"\"\"|^[\t ]*'''.*?'''", re.DOTALL | re.MULTILINE)
 SINGLE_LINE_COMMENTS = re.compile(r"^[ \t]*#", re.MULTILINE)
 EMPTY_LINES = re.compile("^[ \t]*$", re.MULTILINE)
+
+# One decision point each. BoolOp is counted separately: `a and b and c` is two branches, not one.
+DECISION_POINTS = (
+    ast.If,
+    ast.IfExp,
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.ExceptHandler,
+    ast.Assert,
+    ast.match_case,
+)
 
 
 def empty_lines(string: str):
@@ -25,6 +40,38 @@ def functions(string):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             fns.append(ast.get_source_segment(string, node))
     return fns
+
+
+def cyclomatic_complexity(module_source: str):
+    """McCabe complexity for the whole module: one linearly independent path, plus one per branch."""
+    total = 1
+    for node in ast.walk(ast.parse(module_source)):
+        if isinstance(node, DECISION_POINTS):
+            total += 1
+        elif isinstance(node, ast.BoolOp):
+            total += len(node.values) - 1
+        elif isinstance(node, ast.comprehension):
+            total += 1 + len(node.ifs)
+    return total
+
+
+def maintainability_index(module_source: str):
+    """Coleman-Oman index rescaled to 0-100, where higher is more maintainable."""
+    volume = halstead_metrics(module_source)["volume"]
+    comments = len(comments_and_docstrings(module_source))
+    sloc = len(module_source.split("\n")) - len(empty_lines(module_source)) - comments
+    if sloc <= 0 or volume <= 0:
+        return 100.0
+    raw = (
+        171
+        - 5.2 * log(volume)
+        - 0.23 * cyclomatic_complexity(module_source)
+        - 16.2 * log(sloc)
+        + 50 * sin(sqrt(2.4 * comments / sloc))
+    )
+    # ponytail: clamped to 0-100 so it reads as a percentage. The comment term can push raw above
+    # 171, which is why the upper bound is here and not just a max(0, ...).
+    return min(100.0, max(0.0, raw * 100 / 171))
 
 
 def _import_names(code):
