@@ -19,21 +19,25 @@ def create_graph(package_data: dict):
             label=module.split("/")[-1],
             title=node_data({"path": module, **data}),
             size=node_size(data["total_lines"]),
+            maintainability=data["maintainability_index"],
         )
     for module, data in package_data["modules"].items():
         for imported in data["imports"]:
-            if imported not in G.nodes:
-                G.add_node(imported, label=imported.split("/")[-1])
             G.add_edge(imported, module)
     return G
 
 
-def propagate_complexity(graph: nx.DiGraph):
-    pass
+def maintainability(G, damping=0.5):
+    """0-100. Importance-weighted mean of raw MI."""
+    pr = nx.pagerank(G.reverse(copy=True), alpha=damping)
+    w = {n: G.nodes[n]["size"] * pr[n] for n in G}
+    tot = sum(w.values())
+    return round(sum(w[n] * G.nodes[n]["mi"] for n in G) / tot, 1)
 
 
 def create_viz(package_data: dict, fpath: str):
     G = create_graph(package_data=package_data)
+    maintainability_score = maintainability(G)
 
     net = Network(height="600px", width="100%", notebook=False, directed=True)
     net.from_nx(G)
