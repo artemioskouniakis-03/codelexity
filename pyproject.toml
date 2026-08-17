@@ -27,7 +27,7 @@ dev = [
 
 [tool.ruff]
 # Set your preferred line length rule
-line-length = 88 
+line-length = 120
 
 [tool.ruff.lint]
 # E, F = standard errors/warnings
