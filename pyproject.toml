@@ -19,3 +19,24 @@ codelexity = { path = "src", editable = true }
 requires = ["uv_build>=0.10,<0.12"]
 build-backend = "uv_build"
 
+[dependency-groups]
+dev = [
+    "prek>=0.4.14",
+    "ruff>=0.16.3",
+]
+
+[tool.ruff]
+# Set your preferred line length rule
+line-length = 88 
+
+[tool.ruff.lint]
+# E, F = standard errors/warnings
+# I = Isort (handles argument/import sorting rules)
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+# Forces arguments/imports into a specific sorted structure
+force-single-line = false
+order-by-type = true
+
+

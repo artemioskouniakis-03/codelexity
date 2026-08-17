@@ -1,0 +1,16 @@
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "ruff"
+name = "Ruff"
+entry = "ruff check --fix"
+language = "system"
+types = ["python"]
+
+[[repos.hooks]]
+id = "ruff-format"
+name = "Ruff Format"
+entry = "ruff format"
+language = "system"
+types = ["python"]
