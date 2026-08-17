@@ -132,6 +132,8 @@ def analyze_module(path, root=None):
         "contained_function_length": sorted(
             [len(f.split("\n")) - len(empty_lines(f)) - len(comments_and_docstrings(f)) for f in functions(st)]
         ),
+        "halstead_metrics": halstead_metrics(st),
+        "maintainability_index": round(maintainability_index(st), 1),
     }
 
 

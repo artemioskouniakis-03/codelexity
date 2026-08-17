@@ -1,10 +1,3 @@
-"""Halstead metrics from the parse tree.
-
-Operators are ast node types, operands are the names and literals they act on. Working from
-the tree rather than the token stream keeps paired delimiters as one operator (a `Call` node,
-not a `(` plus a `)`) and drops comments without a filter, since ast never emits them.
-"""
-
 import ast
 from collections import Counter
 from math import log2
