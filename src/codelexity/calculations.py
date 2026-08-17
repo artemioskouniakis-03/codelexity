@@ -92,6 +92,13 @@ def is_valid(module_path: str, include_only, exclude):
     excluded = exclude and set(pathlist).isdisjoint(set(exclude))
     return included and not excluded
 
+def advanced_analysis(package_data: dict):
+    return {
+    "total_lines" : sum(d['total_lines'] for d in package_data.values()),
+    "total_functions" : sum(len(d['contained_function_length']) for d in package_data.values()),
+    "total_modules" : len(package_data.keys()),
+    }
+
 def analyze_package(path, exclude = (), include_only = (), max_recursion=25):
     module_dict = {}
     resolved_path = Path(path)
@@ -105,4 +112,4 @@ def analyze_package(path, exclude = (), include_only = (), max_recursion=25):
             module_data = analyze_module(imp, root=resolved_path)
             module_data['imports'] = [imp_mod for imp_mod in module_data['imports'] if is_valid(imp_mod, exclude, include_only)]
             module_dict[imp] = module_data
-    return module_dict
+    return {"analytics": advanced_analysis(module_dict), "modules" : module_dict}
