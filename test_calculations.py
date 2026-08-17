@@ -1,12 +1,17 @@
-"""Wide, shallow smoke tests for codelexity.calculations. No pytest: stdlib unittest covers it."""
+"""Wide, shallow smoke tests for codelexity. No pytest: stdlib unittest covers it."""
 import tempfile
 import unittest
+from math import log2
 from pathlib import Path
+
+import networkx as nx
 
 from codelexity.calculations import (
     empty_lines, comments_and_docstrings, functions, normalized_path_list,
-    imports, analyze_module, analyze_package,
+    imports, analyze_module, analyze_package, cyclomatic_complexity, maintainability_index,
 )
+from codelexity.graph import maintainability, mi_color
+from codelexity.halstead import halstead_metrics, operators_and_operands
 
 SAMPLE = Path(__file__).with_name("test_module.py").read_text()
 
@@ -86,6 +91,70 @@ class TestModuleAndPackageAnalysis(unittest.TestCase):
             result = analyze_package(root, include_only=("drop",))
             self.assertTrue(any("drop/b.py" in k for k in result))
             self.assertFalse(any("keep/a.py" in k for k in result))
+
+
+class TestHalstead(unittest.TestCase):
+    def test_splits_operators_from_operands(self):
+        m = halstead_metrics("a = b + 1\n")  # operators: = + ; operands: a b 1
+        self.assertEqual((m["distinct_operators"], m["total_operators"]), (2, 2))
+        self.assertEqual((m["distinct_operands"], m["total_operands"]), (3, 3))
+        self.assertEqual((m["vocabulary"], m["length"]), (5, 5))
+        self.assertAlmostEqual(m["volume"], 5 * log2(5))
+        self.assertAlmostEqual(m["difficulty"], (2 * 3) / (2 * 3))
+
+    def test_statements_count_as_operators(self):
+        m = halstead_metrics("for x in y:\n    pass\n")  # For, Pass
+        self.assertEqual(m["total_operators"], 2)
+        self.assertEqual(m["distinct_operands"], 2)  # x, y
+
+    def test_call_is_one_operator_not_a_paired_delimiter(self):
+        ops, _ = operators_and_operands("f(1)\n")
+        self.assertEqual(dict(ops), {"Call": 1})
+
+    def test_empty_source_does_not_divide_by_zero(self):
+        m = halstead_metrics("")
+        self.assertEqual((m["volume"], m["difficulty"], m["effort"]), (0.0, 0.0, 0.0))
+
+
+class TestComplexityMetrics(unittest.TestCase):
+    def test_cyclomatic_complexity_counts_branches(self):
+        self.assertEqual(cyclomatic_complexity(""), 1)  # straight-line code is 1, never 0
+        self.assertEqual(cyclomatic_complexity("if a:\n    pass\n"), 2)
+        self.assertEqual(cyclomatic_complexity("if a and b and c:\n    pass\n"), 4)  # If + 2 BoolOp branches
+        self.assertEqual(cyclomatic_complexity("[x for x in y if x]\n"), 3)  # comprehension + its if
+
+    def test_cyclomatic_complexity_counts_except_handlers(self):
+        src = "try:\n    pass\nexcept KeyError:\n    pass\nexcept ValueError:\n    pass\n"
+        self.assertEqual(cyclomatic_complexity(src), 3)
+
+    def test_maintainability_index_is_a_percentage(self):
+        self.assertEqual(maintainability_index(""), 100.0)  # nothing to maintain
+        mi = maintainability_index(SAMPLE)
+        self.assertGreaterEqual(mi, 0.0)
+        self.assertLessEqual(mi, 100.0)
+
+    def test_maintainability_index_drops_as_code_gets_hairier(self):
+        simple = "def f(a):\n    return a\n"
+        hairy = simple + "".join(f"def g{i}(a, b):\n    return a if a and b else b\n" for i in range(30))
+        self.assertLess(maintainability_index(hairy), maintainability_index(simple))
+
+
+class TestGraphMetrics(unittest.TestCase):
+    def test_mi_color_bands(self):
+        self.assertEqual(mi_color(65), "#2e7d32")
+        self.assertEqual(mi_color(64), "#f9a825")
+        self.assertEqual(mi_color(40), "#f9a825")
+        self.assertEqual(mi_color(39), "#c62828")
+
+    def test_maintainability_ignores_nodes_without_data(self):
+        G = nx.DiGraph()
+        G.add_node("a", size=10, maintainability=40.0)
+        G.add_node("b", size=10, maintainability=60.0)
+        G.add_edge("transitive_import", "a")  # no attributes: must not raise
+        self.assertAlmostEqual(maintainability(G), 50.0, delta=10.0)
+
+    def test_maintainability_of_empty_graph(self):
+        self.assertEqual(maintainability(nx.DiGraph()), 100.0)
 
 
 if __name__ == "__main__":

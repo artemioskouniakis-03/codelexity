@@ -2,9 +2,6 @@
 test module docstring
 
 """
-import ast
-from os.path import split
-
 def s(a,b):
     """test function docstring"""
     #

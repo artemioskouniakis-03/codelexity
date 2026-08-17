@@ -27,17 +27,32 @@ def create_graph(package_data: dict):
     return G
 
 
+MI_BANDS = ((65, "#2e7d32"), (40, "#f9a825"))  # first threshold met wins; below all -> red
+
+
+def mi_color(score):
+    return next((colour for threshold, colour in MI_BANDS if score >= threshold), "#c62828")
+
+
 def maintainability(G, damping=0.5):
-    """0-100. Importance-weighted mean of raw MI."""
-    pr = nx.pagerank(G.reverse(copy=True), alpha=damping)
-    w = {n: G.nodes[n]["size"] * pr[n] for n in G}
-    tot = sum(w.values())
-    return round(sum(w[n] * G.nodes[n]["mi"] for n in G) / tot, 1)
+    """0-100. Importance-weighted mean of raw MI over the modules that carry data."""
+    # Edges pull in transitive imports that were never analyzed, so they have no attributes.
+    scored = [n for n in G if "maintainability" in G.nodes[n]]
+    if not scored:
+        return 100.0
+    try:
+        centrality = nx.katz_centrality(G.reverse(copy=True), alpha=damping)
+    except nx.PowerIterationFailedConvergence:
+        # ponytail: alpha=0.5 is near the convergence bound for dense graphs. Fall back to
+        # size-only weighting rather than crash the whole viz; lower `damping` for a real fix.
+        centrality = dict.fromkeys(G, 1.0)
+    w = {n: G.nodes[n]["size"] * centrality[n] for n in scored}
+    return round(sum(w[n] * G.nodes[n]["maintainability"] for n in scored) / sum(w.values()), 1)
 
 
 def create_viz(package_data: dict, fpath: str):
     G = create_graph(package_data=package_data)
-    maintainability_score = maintainability(G)
+    maintainability_score = int(round(maintainability(G)))
 
     net = Network(height="600px", width="100%", notebook=False, directed=True)
     net.from_nx(G)
@@ -48,6 +63,8 @@ def create_viz(package_data: dict, fpath: str):
         "border:1px solid #ccc;padding:8px 12px;font-family:sans-serif;"
         'font-size:14px;z-index:1000;">'
         '<div style="font-size:22px;font-weight:bold;margin-bottom:6px;">Codelexity Analysis</div>'
+        f'<div style="font-size:18px;font-weight:bold;margin-bottom:6px;'
+        f'color:{mi_color(maintainability_score)};">Maintainability: {maintainability_score}%</div>'
         f"<b>Total lines of code:</b> {package_data['analytics']['total_lines']}<br>"
         f"<b>Total modules:</b> {package_data['analytics']['total_modules']}<br>"
         f"<b>Total functions/methods:</b> {package_data['analytics']['total_functions']}</div>"
