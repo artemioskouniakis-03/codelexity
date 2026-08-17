@@ -1,4 +1,7 @@
 *.json
 *.html
 
-lib/*
+*/__pycache__/*
+*.py[cod]
+*$py.class
+
