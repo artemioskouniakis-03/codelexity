@@ -36,11 +36,10 @@ parser.add_argument(
 )
 parser.add_argument("-a", "--absolute", action="store_true", help="If added all paths will be absolute.")
 
-args = parser.parse_args()
-print(args)
-
 
 def main():
+    args = parser.parse_args()
+
     # find and resolve path
     path = Path(args.filepath).resolve()
     print(f"Analyzing code in : {path.as_posix()}")
