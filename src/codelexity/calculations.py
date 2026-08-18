@@ -149,9 +149,9 @@ def normalized_path_list(path: str):
 
 def shorten(path: Path, root: Path):
     ANON_BASES = (
-    (sysconfig.get_paths()["stdlib"], "<stdlib>/"),
-    (sysconfig.get_paths()["purelib"], "<site-packages>/"),
-    (Path.home(), "~/"),
+        (sysconfig.get_paths()["stdlib"], "<stdlib>/"),
+        (sysconfig.get_paths()["purelib"], "<site-packages>/"),
+        (Path.home(), "~/"),
     )
     for base, tag in ((root, ""), *ANON_BASES):
         if path.is_relative_to(base):

@@ -59,7 +59,12 @@ def create_viz(package_data: dict, fpath: str):
     G = create_graph(package_data=package_data)
     maintainability_score = int(round(maintainability(G)))
 
-    net = Network(height="600px", width="100%", notebook=False, directed=True,)
+    net = Network(
+        height="600px",
+        width="100%",
+        notebook=False,
+        directed=True,
+    )
     net.from_nx(G)
     net.set_options("""
         var options = {

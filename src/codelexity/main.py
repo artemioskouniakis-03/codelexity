@@ -27,14 +27,18 @@ parser.add_argument(
     "-i", "--include-only", nargs="+", type=str, default=(), help="Provide the list of packages/modules to be included."
 )
 parser.add_argument(
-    "-e", "--exclude", nargs="+", type=str, default=(".venv", "bin"), help="Provide a list of packages/modules to exclude."
+    "-e",
+    "--exclude",
+    nargs="+",
+    type=str,
+    default=(".venv", "bin"),
+    help="Provide a list of packages/modules to exclude.",
 )
-parser.add_argument(
-    "-a", "--absolute", action="store_true", help="If added all paths will be absolute."
-)
+parser.add_argument("-a", "--absolute", action="store_true", help="If added all paths will be absolute.")
 
 args = parser.parse_args()
 print(args)
+
 
 def main():
     # find and resolve path
