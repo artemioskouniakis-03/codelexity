@@ -57,3 +57,15 @@ This is how the metrics in this repo are calculated.
 It is easy to understand that a densly connected dependency graph affects the maintainability. Central nodes (those that are imported from other modules that are reachable downstream) are more likely to cause issues. Therefore central modules that are not easy to maintain affect the maintainability of the whole package.
 
 To measure centrality, `codelexity` uses [Katz centrality](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.katz_centrality.html). The centrality value is then multiplied by the module length and normalized by the sum of the respective value in all modules. The corresponding value is used as a weight to compute the total Maintainability Index.
+
+### Examples
+
+
+## Running the tests
+
+The suite lives in `tests/` and uses the standard library's `unittest` — no test dependencies to install.
+
+```sh
+uv run python -m unittest discover        # all tests
+uv run python -m unittest discover -v     # verbose, one line per test
+```

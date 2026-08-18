@@ -1,4 +1,6 @@
 """Wide, shallow smoke tests for codelexity. No pytest: stdlib unittest covers it."""
+
+import sysconfig
 import tempfile
 import unittest
 from math import log2
@@ -7,10 +9,18 @@ from pathlib import Path
 import networkx as nx
 
 from codelexity.calculations import (
-    empty_lines, comments_and_docstrings, functions, normalized_path_list,
-    imports, analyze_module, analyze_package, cyclomatic_complexity, maintainability_index,
+    analyze_module,
+    analyze_package,
+    comments_and_docstrings,
+    cyclomatic_complexity,
+    empty_lines,
+    functions,
+    imports,
+    maintainability_index,
+    normalized_path_list,
+    shorten,
 )
-from codelexity.graph import maintainability, mi_color
+from codelexity.graph import MI_BANDS, create_graph, maintainability, mi_color
 from codelexity.halstead import halstead_metrics, operators_and_operands
 
 SAMPLE = Path(__file__).with_name("test_module.py").read_text()
@@ -72,7 +82,14 @@ class TestModuleAndPackageAnalysis(unittest.TestCase):
             f = Path(d) / "m.py"
             f.write_text(SAMPLE)
             data = analyze_module(f, root=Path(d))
-            for key in ("imports", "total_lines", "empty_lines", "comments", "code_length", "contained_function_length"):
+            for key in (
+                "imports",
+                "total_lines",
+                "empty_lines",
+                "comments",
+                "code_length",
+                "contained_function_length",
+            ):
                 self.assertIn(key, data)
             self.assertEqual(len(data["contained_function_length"]), 6)
 
@@ -84,11 +101,11 @@ class TestModuleAndPackageAnalysis(unittest.TestCase):
             (root / "drop").mkdir()
             (root / "drop" / "b.py").write_text("import os\n")
 
-            result = analyze_package(root, exclude=("drop",))
+            result = analyze_package(root, exclude=("drop",))["modules"]
             self.assertTrue(any("keep/a.py" in k for k in result))
             self.assertFalse(any("drop/b.py" in k for k in result))
 
-            result = analyze_package(root, include_only=("drop",))
+            result = analyze_package(root, include_only=("drop",))["modules"]
             self.assertTrue(any("drop/b.py" in k for k in result))
             self.assertFalse(any("keep/a.py" in k for k in result))
 
@@ -139,22 +156,36 @@ class TestComplexityMetrics(unittest.TestCase):
         self.assertLess(maintainability_index(hairy), maintainability_index(simple))
 
 
+class TestShorten(unittest.TestCase):
+    def test_bases_are_tried_most_specific_first(self):
+        # $HOME is a parent of stdlib and site-packages, so order is the whole correctness argument:
+        # try it too early and everything collapses to "~/...".
+        root = Path("/repo/src")
+        self.assertEqual(shorten(root / "pkg/a.py", root), "pkg/a.py")
+        self.assertEqual(shorten(Path(sysconfig.get_paths()["stdlib"]) / "ast.py", root), "<stdlib>/ast.py")
+        self.assertEqual(shorten(Path.home() / "elsewhere/x.py", root), "~/elsewhere/x.py")
+        self.assertEqual(shorten(Path("/opt/nowhere/y.py"), root), "/opt/nowhere/y.py")  # no base matches
+
+
 class TestGraphMetrics(unittest.TestCase):
     def test_mi_color_bands(self):
-        self.assertEqual(mi_color(65), "#2e7d32")
-        self.assertEqual(mi_color(64), "#f9a825")
-        self.assertEqual(mi_color(40), "#f9a825")
-        self.assertEqual(mi_color(39), "#c62828")
+        # Read off MI_BANDS rather than hardcoded, so retuning the ramp can't break this.
+        for threshold, colour in MI_BANDS:
+            self.assertEqual(mi_color(threshold), colour)  # thresholds are inclusive
+        self.assertEqual(mi_color(100), MI_BANDS[0][1])
+        self.assertEqual(mi_color(0), MI_BANDS[-1][1])
 
-    def test_maintainability_ignores_nodes_without_data(self):
-        G = nx.DiGraph()
-        G.add_node("a", size=10, maintainability=40.0)
-        G.add_node("b", size=10, maintainability=60.0)
-        G.add_edge("transitive_import", "a")  # no attributes: must not raise
-        self.assertAlmostEqual(maintainability(G), 50.0, delta=10.0)
+    def test_create_graph_never_leaves_a_node_without_data(self):
+        # maintainability() indexes G.nodes[n]["size"] unguarded, so this is what keeps it safe:
+        # edges to imports that analyze_package never walked into must not become bare nodes.
+        mod = {"imports": ["never_analyzed.py"], "total_lines": 10, "maintainability_index": 40.0}
+        data = {"modules": {"a.py": mod}}
+        G = create_graph(data)
+        self.assertEqual(list(G), ["a.py"])
+        self.assertAlmostEqual(maintainability(G), 40.0)
 
     def test_maintainability_of_empty_graph(self):
-        self.assertEqual(maintainability(nx.DiGraph()), 100.0)
+        self.assertEqual(maintainability(nx.DiGraph()), 0)
 
 
 if __name__ == "__main__":
