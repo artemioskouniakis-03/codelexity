@@ -4,9 +4,8 @@ import networkx as nx
 from pyvis.network import Network
 
 
-
 def node_data(data: dict):
-    return "\n-".join(f"{k}: {v}" for k,v in data.items() if isinstance(v,(str,int,float)))
+    return "\n-".join(f"{k}: {v}" for k, v in data.items() if isinstance(v, (str, int, float)))
 
 
 node_size = lambda num: max(min(num**0.5, 50), 3)
@@ -35,11 +34,14 @@ def create_graph(package_data: dict):
         )
     for module, data in package_data["modules"].items():
         for imported in data["imports"]:
-            G.add_edge(imported, module)
+            # Only edges between analyzed modules. analyze_package stops at depth 1, so deeper
+            # imports have no metrics; add_edge would invent attribute-less nodes for them.
+            if imported in package_data["modules"]:
+                G.add_edge(imported, module)
     return G
 
 
-def maintainability(G, damping=.5):
+def maintainability(G, damping=0.5):
     """0-100. Importance-weighted mean of raw MI over the modules that carry data."""
     # Edges pull in transitive imports that were never analyzed, so they have no attributes.
     try:
@@ -47,9 +49,9 @@ def maintainability(G, damping=.5):
     except nx.PowerIterationFailedConvergence:
         print("Failed to converge!")
         centrality = dict.fromkeys(G, 1.0)
-    weights = {n:G.nodes[n]["size"]* centrality[n] for n in G.nodes} #weight by size and centrality
-    weights = {n:v/sum(weights.values()) for n,v in weights.items()}
-    adjusted_m = [G.nodes[n]["maintainability"]* weights[n] for n in G.nodes]
+    weights = {n: G.nodes[n]["size"] * centrality[n] for n in G.nodes}  # weight by size and centrality
+    weights = {n: v / sum(weights.values()) for n, v in weights.items()}
+    adjusted_m = [G.nodes[n]["maintainability"] * weights[n] for n in G.nodes]
     return sum(adjusted_m)
 
 
@@ -57,8 +59,15 @@ def create_viz(package_data: dict, fpath: str):
     G = create_graph(package_data=package_data)
     maintainability_score = int(round(maintainability(G)))
 
-    net = Network(height="600px", width="100%", notebook=False, directed=True)
+    net = Network(height="600px", width="100%", notebook=False, directed=True,)
     net.from_nx(G)
+    net.set_options("""
+        var options = {
+        "physics": {
+            "maxVelocity": 5
+        }
+        }
+        """)
     net.save_graph(fpath)
 
     legend = (

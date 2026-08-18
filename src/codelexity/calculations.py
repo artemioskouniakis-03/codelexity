@@ -3,6 +3,7 @@ import dis
 import importlib.machinery
 import re
 import sys
+import sysconfig
 from math import log, sin, sqrt
 from pathlib import Path
 
@@ -144,6 +145,18 @@ def normalized_path_list(path: str):
     for suff in suffixes:
         name = name.replace(suff, "")
     return path_list + [name]
+
+
+def shorten(path: Path, root: Path):
+    ANON_BASES = (
+    (sysconfig.get_paths()["stdlib"], "<stdlib>/"),
+    (sysconfig.get_paths()["purelib"], "<site-packages>/"),
+    (Path.home(), "~/"),
+    )
+    for base, tag in ((root, ""), *ANON_BASES):
+        if path.is_relative_to(base):
+            return tag + path.relative_to(base).as_posix()
+    return path.as_posix()
 
 
 def is_valid(module_path: str, include_only, exclude):

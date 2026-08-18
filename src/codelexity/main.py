@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from codelexity.calculations import analyze_package
+from codelexity.calculations import analyze_package, shorten
 from codelexity.graph import create_viz
 
 HTML_NAME = "codelexity.html"
@@ -27,12 +27,14 @@ parser.add_argument(
     "-i", "--include-only", nargs="+", type=str, default=(), help="Provide the list of packages/modules to be included."
 )
 parser.add_argument(
-    "-e", "--exclude", nargs="+", type=str, default=(), help="Provide a list of packages/modules to exclude."
+    "-e", "--exclude", nargs="+", type=str, default=(".venv", "bin"), help="Provide a list of packages/modules to exclude."
+)
+parser.add_argument(
+    "-a", "--absolute", action="store_true", help="If added all paths will be absolute."
 )
 
 args = parser.parse_args()
 print(args)
-
 
 def main():
     # find and resolve path
@@ -44,6 +46,13 @@ def main():
 
     # analyze code
     data = analyze_package(path, exclude=args.exclude, include_only=args.include_only)
+
+    if not args.absolute:
+        # Keys and imports shortened together — create_graph matches edges between the two.
+        data["modules"] = {
+            shorten(Path(mod), path): {**d, "imports": [shorten(Path(i), path) for i in d["imports"]]}
+            for mod, d in data["modules"].items()
+        }
 
     if args.plot:
         create_viz(data, HTML_NAME)
