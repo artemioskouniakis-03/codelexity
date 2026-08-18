@@ -4,12 +4,12 @@ A python package that helps you measure, visualize and ultimately manage code co
 
 ## Motivation
 
-In the age of AI, coebases are becoming messier. `Codelexity` helps you visualize and manage this complexity.
+In the age of AI, codebases are becoming messier. `Codelexity` helps you visualize and manage this complexity.
 
 ## Quick Start
 
 - Step 1: `uv add codelexity`
-- Step 2: `uv run <your_package_path> codelexity --plot` - this will create a `codelexity.html` that you can open and play with in your browser.
+- Step 2: `uv run codelexity <your_package_path> --plot` - this will create a `codelexity.html` that you can open and play with in your browser.
 
 ![Codelexity Graph](assets/codelexity_codelexity.png)
 _Codelexity HTML report on the `codelexity` repo_
