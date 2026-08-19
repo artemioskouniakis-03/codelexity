@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 — 2026-08-19
+
+Fixed typo
+
+### Fixed
+- Fixed typo in `.read_text()`
+
 ## 0.2.1 — 2026-08-19
 
 Fixed bug with `utf-8` encoding 
