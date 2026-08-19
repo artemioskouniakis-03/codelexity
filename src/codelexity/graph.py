@@ -86,7 +86,7 @@ def create_viz(package_data: dict, fpath: str):
         f"Maintainability: {maintainability_score}%</div><br>"
         f"Total lines of code: {package_data['analytics']['total_lines']}<br>"
         f"Total modules: {package_data['analytics']['total_modules']}<br>"
-        f"Total functions/methods: {package_data['analytics']['total_functions']}</div>"
+        f"Total functions/methods: {package_data['analytics']['total_functions']}<br>"
         f"Total comprehension time (h): {package_data['analytics']['total_man_hours']}</div>"
     )
     path = Path(fpath)
