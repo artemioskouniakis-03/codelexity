@@ -118,7 +118,7 @@ def imports(module_path, root=None):
 
 def analyze_module(path, root=None):
     pth = Path(path).resolve()
-    st = pth.read_txt(encoding="utf-8")
+    st = pth.read_text(encoding="utf-8")
     total, empty, comments = (
         len(st.split("\n")),
         len(empty_lines(st)),
