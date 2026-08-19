@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-08-19
+
+Fixed bug with `utf-8` encoding 
+
+### Fixed
+- Fixed the encoding related bug in reading text files
+
+
 ## 0.2.0 — 2026-08-19
 
 Adding a new metric
