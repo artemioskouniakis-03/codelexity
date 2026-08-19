@@ -2,11 +2,15 @@
 
 # `Codelexity`
 
+![version](https://img.shields.io/badge/version-0.1.0-blue)
+![coverage](https://img.shields.io/badge/coverage-78%25-yellow)
+![python](https://img.shields.io/badge/python-3.10%2B-blue)
+
 A python package that helps you measure, visualize and ultimately manage code complexity.
 
 ## Motivation
 
-In the age of AI, codebases are becoming messier. `Codelexity` helps you visualize and manage this complexity.
+In the age of AI, codebases are becoming messier and more difficult to maintain. `Codelexity` helps you visualize and manage this complexity.
 
 ## Quick Start
 
@@ -104,4 +108,11 @@ The suite lives in `tests/` and uses the standard library's `unittest` — no te
 ```sh
 uv run python -m unittest discover        # all tests
 uv run python -m unittest discover -v     # verbose, one line per test
+```
+
+Coverage, which needs no dev dependency either:
+
+```sh
+uv run --with coverage coverage run --source=src -m unittest discover
+uv run --with coverage coverage report
 ```

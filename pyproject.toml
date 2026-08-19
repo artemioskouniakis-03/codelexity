@@ -1,9 +1,12 @@
 [project]
 name = "codelexity"
 version = "0.1.0"
-description = "A package that measures code complexity in the age of AI slop"
+description = "A package that measures code complexity in the age of AI slop."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
+maintainers = [{ name = "nickgiki" }]
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "networkx>=3.6.1",
     "pyvis>=0.3.2",
@@ -21,9 +24,20 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "bumpver>=2026.1132",
     "prek>=0.4.14",
     "ruff>=0.16.3",
 ]
+
+[tool.bumpver]
+current_version = "0.1.0"
+version_pattern = "MAJOR.MINOR.PATCH"
+push = false  # inspect the tag before it leaves the machine
+
+[tool.bumpver.file_patterns]
+# The version appears twice in this file: [project] version and current_version above.
+"pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
+"README.md" = ['version-{version}-']
 
 [tool.ruff]
 # Set your preferred line length rule
