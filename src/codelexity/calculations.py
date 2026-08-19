@@ -108,7 +108,7 @@ def _resolve(name, search):
 def imports(module_path, root=None):
     """Full filesystem paths of the local modules `module_path` imports."""
     path = Path(module_path).resolve()
-    code = compile(path.read_text(), str(path), "exec")
+    code = compile(path.read_text(encoding="utf-8"), str(path), "exec")
     root = Path(root).resolve() if root else path.parent
     search = sys.path + [str(root), *(str(d) for d in root.rglob("*") if d.is_dir())]
     names = {n for n in _import_names(code) if n.split(".")[0] not in sys.builtin_module_names}
@@ -118,7 +118,7 @@ def imports(module_path, root=None):
 
 def analyze_module(path, root=None):
     pth = Path(path).resolve()
-    st = pth.open().read()
+    st = pth.read_txt(encoding="utf-8")
     total, empty, comments = (
         len(st.split("\n")),
         len(empty_lines(st)),
