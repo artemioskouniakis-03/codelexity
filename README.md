@@ -58,8 +58,42 @@ It is easy to understand that a densly connected dependency graph affects the ma
 
 To measure centrality, `codelexity` uses [Katz centrality](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.katz_centrality.html). The centrality value is then multiplied by the module length and normalized by the sum of the respective value in all modules. The corresponding value is used as a weight to compute the total Maintainability Index.
 
-### Examples
+### Example - NetworkX
 
+This is a result for the [`networkx` library](https://networkx.org/en/) a large and complex repo. The command used to create the analysis was:
+
+```bash
+codelexity networkx --json --plot
+```
+
+![Codelexity on NetworkX](/assets/codelexity_networkx.png)
+
+Note that the flags `json` and `plot` denote whether the output will be stored as a json named `codelexity.json` and as an html `codelexity.html` in the working directory.
+
+The `codelexity.json` containts aggregate analytics for the whole package and per-module details.
+
+```json
+{
+    "analytics": {
+        "total_lines": 234629,
+        "total_functions": 9555,
+        "total_modules": 624
+    },
+    "modules": {
+        "conftest.py": {
+            "imports": [
+                "<stdlib>/importlib/metadata/__init__.py",
+                "<stdlib>/os.py",
+                "<stdlib>/warnings.py",
+                "__init__.py"
+            ],
+            "total_lines": 262,
+            "empty_lines": 39,
+            "comments": 12,
+            "code_length": 211,
+...
+        }
+```
 
 ## Running the tests
 
