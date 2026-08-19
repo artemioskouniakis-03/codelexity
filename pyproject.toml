@@ -3,14 +3,31 @@ name = "codelexity"
 version = "0.1.0"
 description = "A package that measures code complexity in the age of AI slop."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 maintainers = [{ name = "nickgiki" }]
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
-    "networkx>=3.6.1",
+    # Only DiGraph, katz_centrality and PowerIterationFailedConvergence are used, all stable since
+    # networkx 3.0; from_nx/save_graph likewise for pyvis. Floors verified with --resolution
+    # lowest-direct, no upper caps.
+    "networkx>=3.0",
     "pyvis>=0.3.2",
 ]
+
+keywords = ["complexity", "halstead", "maintainability", "cyclomatic", "static-analysis", "metrics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Quality Assurance",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Homepage = "https://github.com/nickgiki/codelexity"
+Issues = "https://github.com/nickgiki/codelexity/issues"
 
 [project.scripts]
 codelexity = "codelexity.main:main"
