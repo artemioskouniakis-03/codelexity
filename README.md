@@ -2,8 +2,8 @@
 
 # `Codelexity`
 
-![version](https://img.shields.io/badge/version-0.1.0-blue)
-![coverage](https://img.shields.io/badge/coverage-78%25-yellow)
+![version](https://img.shields.io/pypi/v/codelexity)
+![coverage](https://img.shields.io/badge/coverage-77%25-green)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
 A python package that helps you measure, visualize and ultimately manage code complexity.
@@ -17,7 +17,7 @@ In the age of AI, codebases are becoming messier and more difficult to maintain.
 - Step 1: `uv add codelexity`
 - Step 2: `uv run codelexity <your_package_path> --plot` - this will create a `codelexity.html` that you can open and play with in your browser.
 
-![Codelexity Graph](assets/codelexity_codelexity.png)
+![Codelexity Graph](https://raw.githubusercontent.com/nickgiki/codelexity/main/assets/codelexity_codelexity.png)
 _Codelexity HTML report on the `codelexity` repo_
 
 
@@ -42,7 +42,7 @@ where:
 - $n = n_1 + n_2$ the vocabulary of the program and 
 - $N = N_1 + N_2$ the length of the program
 
-Another important metric is the [**Mc Cabe Cyclomatic Complexity**](https://en.wikipedia.org/wiki/Cyclomatic_complexity) measured as:
+Another important metric is the [Mc Cabe Cyclomatic Complexity](https://en.wikipedia.org/wiki/Cyclomatic_complexity) measured as:
 
 $$M=E-N+2P$$
 
@@ -72,7 +72,7 @@ This is a result for the [`networkx` library](https://networkx.org/en/), a large
 codelexity networkx --json --plot
 ```
 
-![Codelexity on NetworkX](/assets/codelexity_networkx.png)
+![Codelexity on NetworkX](https://raw.githubusercontent.com/nickgiki/codelexity/main/assets/codelexity_networkx.png)
 
 Note that the flags `json` and `plot` denote whether the output will be stored as a json named `codelexity.json` and as an html `codelexity.html` in the working directory.
 

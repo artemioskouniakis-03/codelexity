@@ -1,6 +1,6 @@
 [project]
 name = "codelexity"
-version = "0.1.0"
+version = "0.2.0"
 description = "A package that measures code complexity in the age of AI slop."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,6 +28,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/nickgiki/codelexity"
 Issues = "https://github.com/nickgiki/codelexity/issues"
+Changelog = "https://github.com/nickgiki/codelexity/blob/main/CHANGELOG.md"
 
 [project.scripts]
 codelexity = "codelexity.main:main"
@@ -47,14 +48,14 @@ dev = [
 ]
 
 [tool.bumpver]
-current_version = "0.1.0"
+current_version = "0.2.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 push = false  # inspect the tag before it leaves the machine
 
 [tool.bumpver.file_patterns]
 # The version appears twice in this file: [project] version and current_version above.
 "pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
-"README.md" = ['version-{version}-']
+# No README pattern: its version badge reads live from PyPI, so there is no literal to rewrite.
 
 [tool.ruff]
 # Set your preferred line length rule
@@ -64,6 +65,8 @@ line-length = 120
 # E, F = standard errors/warnings
 # I = Isort (handles argument/import sorting rules)
 select = ["E", "F", "I"]
+ignore = ["E731"]
+
 
 [tool.ruff.lint.isort]
 # Forces arguments/imports into a specific sorted structure
