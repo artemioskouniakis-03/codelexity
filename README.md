@@ -1,4 +1,6 @@
-# Codelexity
+<small>_This project was created with minimal help from AI assistants, mainly for the tests and a couple helper functions. This document is 100% human written._</small>
+
+# `Codelexity`
 
 A python package that helps you measure, visualize and ultimately manage code complexity.
 
