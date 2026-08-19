@@ -3,7 +3,7 @@
 # `Codelexity`
 
 ![version](https://img.shields.io/pypi/v/codelexity)
-![coverage](https://img.shields.io/badge/coverage-78%25-yellow)
+![coverage](https://img.shields.io/badge/coverage-77%25-green)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
 A python package that helps you measure, visualize and ultimately manage code complexity.
