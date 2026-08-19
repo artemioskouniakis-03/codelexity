@@ -60,7 +60,7 @@ To measure centrality, `codelexity` uses [Katz centrality](https://networkx.org/
 
 ### Example - NetworkX
 
-This is a result for the [`networkx` library](https://networkx.org/en/) a large and complex repo. The command used to create the analysis was:
+This is a result for the [`networkx` library](https://networkx.org/en/), a large and complex repo. The command used to create the analysis was:
 
 ```bash
 codelexity networkx --json --plot

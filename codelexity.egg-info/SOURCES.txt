@@ -1,7 +1,0 @@
-README.md
-main.py
-pyproject.toml
-codelexity.egg-info/PKG-INFO
-codelexity.egg-info/SOURCES.txt
-codelexity.egg-info/dependency_links.txt
-codelexity.egg-info/top_level.txt
