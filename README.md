@@ -2,7 +2,7 @@
 
 # `Codelexity`
 
-![version](https://img.shields.io/badge/version-0.1.0-blue)
+![version](https://img.shields.io/pypi/v/codelexity)
 ![coverage](https://img.shields.io/badge/coverage-78%25-yellow)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 

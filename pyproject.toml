@@ -28,6 +28,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/nickgiki/codelexity"
 Issues = "https://github.com/nickgiki/codelexity/issues"
+Changelog = "https://github.com/nickgiki/codelexity/blob/main/CHANGELOG.md"
 
 [project.scripts]
 codelexity = "codelexity.main:main"
@@ -54,7 +55,7 @@ push = false  # inspect the tag before it leaves the machine
 [tool.bumpver.file_patterns]
 # The version appears twice in this file: [project] version and current_version above.
 "pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
-"README.md" = ['version-{version}-']
+# No README pattern: its version badge reads live from PyPI, so there is no literal to rewrite.
 
 [tool.ruff]
 # Set your preferred line length rule
