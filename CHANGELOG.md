@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 — 2026-08-19
+
+Fixed path on Windows
+
+### Fixed
+- `Path(s.origin).as_posix()` is needed everywhere so that paths are consistent in the JSON
+- also added 'utf-8' in the creation of the HTML
+
 ## 0.2.2 — 2026-08-19
 
 Fixed typo

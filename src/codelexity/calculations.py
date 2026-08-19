@@ -96,8 +96,6 @@ def _resolve(name, search):
         try:
             found = locations and importlib.machinery.PathFinder.find_spec(".".join(parts[: i + 1]), locations)
         except KeyError:
-            # ponytail: namespace packages need their own parent in sys.modules
-            # to build a submodule spec; we never import, so treat as unresolved.
             found = None
         if not found:
             break
