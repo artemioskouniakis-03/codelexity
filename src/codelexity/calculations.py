@@ -171,6 +171,11 @@ def advanced_analysis(package_data: dict):
         "total_lines": sum(d["total_lines"] for d in package_data.values()),
         "total_functions": sum(len(d["contained_function_length"]) for d in package_data.values()),
         "total_modules": len(package_data.keys()),
+        "total_man_hours": int(
+            round(
+                sum(d["halstead_metrics"]["time"] for d in package_data.values()) / 3600,
+            )
+        ),
     }
 
 
