@@ -113,7 +113,7 @@ def imports(module_path, root=None):
     search = sys.path + [str(root), *(str(d) for d in root.rglob("*") if d.is_dir())]
     names = {n for n in _import_names(code) if n.split(".")[0] not in sys.builtin_module_names}
     specs = (_resolve(n, search) for n in names)
-    return sorted({s.origin for s in specs if s and s.origin})
+    return sorted({Path(s.origin).as_posix() for s in specs if s and s.origin})
 
 
 def analyze_module(path, root=None):

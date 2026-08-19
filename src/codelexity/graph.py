@@ -90,4 +90,7 @@ def create_viz(package_data: dict, fpath: str):
         f"Total comprehension time (h): {package_data['analytics']['total_man_hours']}</div>"
     )
     path = Path(fpath)
-    path.write_text(path.read_text().replace("<body>", f"<body>\n{legend}", 1))
+    # encoding pinned both ways: pyvis writes UTF-8, but Windows defaults to cp1252, which raises
+    # UnicodeDecodeError on read and produces mojibake on write.
+    html = path.read_text(encoding="utf-8")
+    path.write_text(html.replace("<body>", f"<body>\n{legend}", 1), encoding="utf-8")
