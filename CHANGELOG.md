@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4 — 2026-08-20
+
+Tidying up the README.md
+
+### Fixed
+- Polishing `README.md`
+
 ## 0.2.3 — 2026-08-19
 
 Fixed path on Windows

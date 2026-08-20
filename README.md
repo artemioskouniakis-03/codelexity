@@ -20,6 +20,12 @@ In the age of AI, codebases are becoming messier and more difficult to maintain.
 ![Codelexity Graph](https://raw.githubusercontent.com/nickgiki/codelexity/main/assets/codelexity_codelexity.png)
 _Codelexity HTML report on the `codelexity` repo_
 
+**If you have an older version of python you can still run this package** on your codebase with `uv`:
+
+```bash
+uvx --python 3.11 codelexity <my-package-path>
+```
+
 
 ## Intuition
 
@@ -48,7 +54,7 @@ $$M=E-N+2P$$
 
 where $M$ the complexity, $E$ and $N$ the number of edges and nodes in the computation graph and $P$ the number of connected components.
 
-With Halstead's volume and McCabe's complexity one can compute the [**Maintainability Index**](https://ieeexplore.ieee.org/document/242525) computed as:
+With Halstead's volume and McCabe's complexity one can compute the [Maintainability Index](https://ieeexplore.ieee.org/document/242525) computed as:
 
 $$ 171 - 5.2 * log_2(V) - 0.23 * M- 16.2 * log_2(SLOC)+ 50 * \sqrt{2.4 * perCOM}$$
 
@@ -81,17 +87,18 @@ The `codelexity.json` containts aggregate analytics for the whole package and pe
 ```json
 {
     "analytics": {
-        "total_lines": 234629,
-        "total_functions": 9555,
-        "total_modules": 624
+        "total_lines": 330993,
+        "total_functions": 11740,
+        "total_modules": 862,
+        "total_man_hours": 13956
     },
     "modules": {
         "conftest.py": {
             "imports": [
+                "<site-packages>/networkx/__init__.py",
                 "<stdlib>/importlib/metadata/__init__.py",
                 "<stdlib>/os.py",
-                "<stdlib>/warnings.py",
-                "__init__.py"
+                "<stdlib>/warnings.py"
             ],
             "total_lines": 262,
             "empty_lines": 39,
@@ -99,20 +106,4 @@ The `codelexity.json` containts aggregate analytics for the whole package and pe
             "code_length": 211,
 ...
         }
-```
-
-## Running the tests
-
-The suite lives in `tests/` and uses the standard library's `unittest` — no test dependencies to install.
-
-```sh
-uv run python -m unittest discover        # all tests
-uv run python -m unittest discover -v     # verbose, one line per test
-```
-
-Coverage, which needs no dev dependency either:
-
-```sh
-uv run --with coverage coverage run --source=src -m unittest discover
-uv run --with coverage coverage report
 ```
