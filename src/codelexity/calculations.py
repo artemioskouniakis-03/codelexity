@@ -70,8 +70,6 @@ def maintainability_index(module_source: str):
         - 16.2 * log(sloc)
         + 50 * sin(sqrt(2.4 * comments / sloc))
     )
-    # ponytail: clamped to 0-100 so it reads as a percentage. The comment term can push raw above
-    # 171, which is why the upper bound is here and not just a max(0, ...).
     return min(100.0, max(0.0, raw * 100 / 171))
 
 
