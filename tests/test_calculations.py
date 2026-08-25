@@ -132,6 +132,30 @@ class TestHalstead(unittest.TestCase):
         m = halstead_metrics("")
         self.assertEqual((m["volume"], m["difficulty"], m["effort"]), (0.0, 0.0, 0.0))
 
+    def test_chained_boolop_counts_every_operator(self):
+        # One shared op node serves N values, so the count comes from len(values) - 1.
+        self.assertEqual(dict(operators_and_operands("a and b")[0]), {"And": 1})
+        self.assertEqual(dict(operators_and_operands("a and b and c")[0]), {"And": 2})
+        self.assertEqual(dict(operators_and_operands("a or b or c or d")[0]), {"Or": 3})
+
+    def test_chained_compare_and_binop_count_every_operator(self):
+        self.assertEqual(dict(operators_and_operands("a < b < c")[0]), {"Lt": 2})
+        self.assertEqual(dict(operators_and_operands("a + b + c")[0]), {"Add": 2})
+
+    def test_names_bound_as_str_attributes_are_operands(self):
+        # These bind a name as a plain str attribute, so ast.walk never yields it as a Name node.
+        for src, name in [
+            ("def f(): pass", "f"),
+            ("async def g(): pass", "g"),
+            ("class C: pass", "C"),
+            ("global g", "g"),
+            ("try:\n    pass\nexcept E as e:\n    pass\n", "e"),
+            ("h(kw=1)", "kw"),
+            ("a.attr", "attr"),
+        ]:
+            with self.subTest(src=src):
+                self.assertIn(name, operators_and_operands(src)[1])
+
 
 class TestComplexityMetrics(unittest.TestCase):
     def test_cyclomatic_complexity_counts_branches(self):
