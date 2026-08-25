@@ -9,9 +9,18 @@ IGNORED = (
     ast.arguments,
     ast.BinOp,
     ast.UnaryOp,
-    ast.BoolOp,
     ast.Compare,
+    ast.boolop,
 )
+
+NAMED = {
+    ast.FunctionDef: "name",
+    ast.AsyncFunctionDef: "name",
+    ast.ClassDef: "name",
+    ast.ExceptHandler: "name",
+    ast.keyword: "arg",
+    ast.Attribute: "attr",
+}
 
 
 def operators_and_operands(module_source: str):
@@ -28,10 +37,14 @@ def operators_and_operands(module_source: str):
             operands[node.arg] += 1
         elif isinstance(node, ast.alias):
             operands[node.name] += 1
+        elif isinstance(node, ast.BoolOp):
+            operators[type(node.op).__name__] += len(node.values) - 1
         else:
             operators[type(node).__name__] += 1
-            if isinstance(node, ast.Attribute):
-                operands[node.attr] += 1  # `a.b` is the `.` operator applied to operand `b`
+            if isinstance(node, (ast.Global, ast.Nonlocal)):
+                operands.update(node.names)
+            elif name := getattr(node, NAMED.get(type(node), ""), None):
+                operands[name] += 1
     return operators, operands
 
 
