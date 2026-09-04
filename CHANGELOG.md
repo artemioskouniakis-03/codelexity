@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 — 2026-09-04
+
+Separated graph construction from plotting.
+Added Maintainability Index in the 'analytics'
+
 ## 0.2.5 — 2026-08-25
 
 Fixing erroneous Halstead metrics.
