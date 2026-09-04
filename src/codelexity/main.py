@@ -3,7 +3,8 @@ import json
 from pathlib import Path
 
 from codelexity.calculations import analyze_package, shorten
-from codelexity.graph import create_viz
+from codelexity.graph import create_graph, maintainability
+from codelexity.plot import create_viz
 
 HTML_NAME = "codelexity.html"
 JSON_NAME = "codelexity.json"
@@ -49,6 +50,9 @@ def main():
 
     # analyze code
     data = analyze_package(path, exclude=args.exclude, include_only=args.include_only)
+    G = create_graph(package_data=data)
+    maintainability_index = maintainability(G)
+    data["analytics"]["maintainability_index"] = maintainability_index
 
     if not args.absolute:
         # Keys and imports shortened together — create_graph matches edges between the two.
@@ -58,14 +62,14 @@ def main():
         }
 
     if args.plot:
-        create_viz(data, HTML_NAME)
+        create_viz(data, G, HTML_NAME)
         print(f"Interactive plot saved in: `{Path(HTML_NAME).resolve().as_posix()}`")
 
     if args.json:
         Path("codelexity.json").write_text(json.dumps(data, indent=4), encoding="utf-8")
 
     if not (args.plot or args.json):
-        print(json.dumps(data, indent=4))
+        print(data["analytics"])
 
 
 if __name__ == "__main__":
