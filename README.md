@@ -26,7 +26,6 @@ _Codelexity HTML report on the `codelexity` repo_
 uvx --python 3.11 codelexity <my-package-path>
 ```
 
-
 ## Intuition
 
 There's a ton of literature describing the relationship between complexity and maintainability of code.
@@ -122,3 +121,20 @@ The `codelexity.json` containts aggregate analytics for the whole package and pe
 ...
         }
 ```
+
+## Using `codelexity` as a pre-commit hook
+
+This project can be used a pre-commit hook to minimize the AI-slop complexifying your codebase. This repo uses [`prek`](https://github.com/j178/prek) (a faster, Rust rewrite of `pre-commit`), configured in `prek.toml`:
+
+```toml
+[[repos.hooks]]
+id = "codelexity"
+name = "Codelexity maintainability"
+entry = "uv run codelexity src -i codelexity --min maintainability_index 40.0"
+language = "system"
+pass_filenames = false
+```
+
+`--min KEY VALUE` and `--max KEY VALUE` are repeatable, and work against any key in the `analytics` block — `maintainability_index`, `total_lines`, `coupling_score`, whatever you care about. The moment one is violated, `codelexity` prints why and exits non-zero, which blocks the commit. A few notes if you're wiring this up yourself:
+- Point `codelexity` at your package (not the whole repo) with the path argument, and narrow it further with `-i` if the analyzed path still picks up things you don't want counted.
+- The same flags work outside of hooks too, e.g. as a CI gate: `codelexity src --min maintainability_index 40 --max total_lines 50000`.
