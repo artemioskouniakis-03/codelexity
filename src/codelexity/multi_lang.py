@@ -15,21 +15,30 @@ from codelexity.units import loc, unit_complexity, unit_size
 
 logger = logging.getLogger(__name__)
 
+# Always pruned, regardless of the caller's exclude list - VCS metadata directories are
+# never useful to analyze, and .git in particular can hold hundreds of subdirectories
+# under objects/, refs/, logs/. Once those directories feed into Python/Java import
+# resolution's search path (coupling.resolve_edges), that turns into a severe performance
+# regression (every external/stdlib import lookup has to probe each of them first) rather
+# than just wasted analysis time - worth hardcoding rather than relying on every caller
+# remembering to pass it as an exclude.
+ALWAYS_EXCLUDED_DIRS = frozenset({".git", ".hg", ".svn"})
+
 
 def _discover(root: Path, exclude: tuple[str, ...]) -> tuple[list[Path], list[Path]]:
-    """Walks `root` once, pruning any directory whose own name is in `exclude` before
-    descending into it - unlike `Path.rglob("*")` followed by a per-file filter, this
-    never enumerates the contents of an excluded directory at all. Matters a lot in
-    practice: a `.venv` or `node_modules` can contain tens of thousands of files, and
-    filtering them out after a full recursive walk still pays the cost of walking them.
-    `include_only` is intentionally NOT used for pruning here - it only loosely matches
-    "any path segment", so pruning by it could incorrectly skip a wanted nested folder;
-    it stays a post-walk filter via is_valid(), same as before.
+    """Walks `root` once, pruning any directory whose own name is in `exclude` (plus
+    ALWAYS_EXCLUDED_DIRS) before descending into it - unlike `Path.rglob("*")` followed
+    by a per-file filter, this never enumerates the contents of an excluded directory at
+    all. Matters a lot in practice: a `.venv` or `node_modules` can contain tens of
+    thousands of files, and filtering them out after a full recursive walk still pays the
+    cost of walking them. `include_only` is intentionally NOT used for pruning here - it
+    only loosely matches "any path segment", so pruning by it could incorrectly skip a
+    wanted nested folder; it stays a post-walk filter via is_valid(), same as before.
 
     Returns (files, dirs) - `dirs` is reused by coupling.resolve_edges() for Python/Java
     import resolution, so those don't each re-walk the whole tree per file (previously
     the single biggest cost with a .venv/node_modules present under the analyzed root)."""
-    excluded = set(exclude)
+    excluded = set(exclude) | ALWAYS_EXCLUDED_DIRS
     files: list[Path] = []
     dirs: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -186,12 +195,15 @@ def analyze_package_multi_lang(
         for b in duplicate_blocks_raw
     )
 
+    edges = tuple((importer, target) for importer, targets in resolved_edges.items() for target in targets)
+
     return AnalysisResult(
         total_loc=sum(file_loc.values()),
         units=tuple(units),
         files=tuple(files),
         components=tuple(components),
         duplicate_blocks=duplicate_blocks,
+        edges=edges,
         unparsed_files=tuple(unparsed_files),
         unsupported_files=tuple(unsupported_files),
     )

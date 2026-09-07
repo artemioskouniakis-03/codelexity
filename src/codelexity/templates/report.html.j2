@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Codelexity Report</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   body { font-family: ui-monospace, Consolas, monospace; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
   h1, h2 { margin-bottom: 0.3rem; }
@@ -18,6 +19,12 @@
   iframe { width: 100%; height: 600px; border: 1px solid #ddd; }
   .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 2px 8px; font-size: 0.85rem; }
   footer { font-size: 0.8rem; color: #666; margin-top: 2rem; }
+  .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; gap: 12px; }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-row .name { flex: 1 1 auto; }
+  .metric-row .stars { font-size: 1rem; }
+  .dl-btn { cursor: pointer; border: 1px solid #ccc; background: #f7f7f7; border-radius: 4px; padding: 4px 10px; font: inherit; font-size: 0.8rem; }
+  .dl-btn:hover { background: #eee; }
 </style>
 </head>
 <body>
@@ -29,10 +36,62 @@
      COCOMO project type: {{ cocomo.project_type }}</p>
 </header>
 
+<script>
+  const FINDINGS = {{ findings|tojson_script }};
+
+  function toCSV(rows) {
+    if (!rows.length) return "";
+    const headers = Object.keys(rows[0]);
+    const escape = (v) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+    return [headers.join(",")].concat(rows.map((r) => headers.map((h) => escape(r[h])).join(","))).join("\n");
+  }
+
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function downloadFindingsCSV(metric) {
+    const rows = FINDINGS[metric] || [];
+    downloadBlob(toCSV(rows), metric.replace(/\s+/g, "_") + "_findings.csv", "text/csv");
+  }
+
+  function downloadAllFindingsXlsx() {
+    const wb = XLSX.utils.book_new();
+    for (const [metric, rows] of Object.entries(FINDINGS)) {
+      const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
+      XLSX.utils.book_append_sheet(wb, sheet, metric.substring(0, 31));
+    }
+    XLSX.writeFile(wb, "codelexity_findings.xlsx");
+  }
+</script>
+
 <section class="card">
   <h2>Overall Score</h2>
   <div class="stars">{{ "★" * scores.overall_stars }}{{ "☆" * (5 - scores.overall_stars) }}</div>
-  <p>Raw score: {{ "%.2f"|format(scores.overall_raw) }} / 5.5</p>
+  <p>Raw score: {{ "%.2f"|format(scores.overall_raw) }} / 5.5
+     &mdash; weighted average of the metrics below (Volume excluded, shown as context only).</p>
+  <button class="dl-btn" onclick="downloadAllFindingsXlsx()">Download all findings (Excel, one tab per metric)</button>
+
+  {% for label, score, description in metric_cards %}
+  <div class="metric-row">
+    <div class="name"><strong>{{ label }}</strong><br><span style="font-size:0.8rem;color:#666;">{{ description }}</span></div>
+    <div class="stars">{{ "★" * score.stars }}{{ "☆" * (5 - score.stars) }} <span style="font-size:0.7rem;color:#666;">({{ "%.2f"|format(score.raw_score) }})</span></div>
+    <button class="dl-btn" onclick="downloadFindingsCSV('{{ label }}')">Download findings</button>
+  </div>
+  {% endfor %}
+  <div class="metric-row">
+    <div class="name"><strong>Volume</strong> <span class="badge">{{ volume_label }}</span><br>
+      <span style="font-size:0.8rem;color:#666;">Size, not risk - shown for context, not weighted into the overall score</span></div>
+    <div class="stars">{{ "★" * volume_stars }}{{ "☆" * (5 - volume_stars) }}<br>
+      <span style="font-size:0.7rem;color:#666;">{{ analysis.total_loc }} LOC ({{ kloc }} KLOC)</span></div>
+    <button class="dl-btn" onclick="downloadFindingsCSV('Volume')">Download findings</button>
+  </div>
 </section>
 
 <section>
@@ -40,7 +99,6 @@
   {% for label, score, description in metric_cards %}
   <div class="card">
     <h3>{{ label }} <span class="stars" style="font-size:1rem;">{{ "★" * score.stars }}{{ "☆" * (5 - score.stars) }}</span></h3>
-    <p>{{ description }}</p>
     <p>{{ "%.1f"|format(score.severity_pct) }}% of code in Very-High/High risk-weighted severity (raw score {{ "%.2f"|format(score.raw_score) }})</p>
     <div class="band-bar">
       {% for band, pct in score.band_distribution.items() %}
@@ -49,24 +107,23 @@
     </div>
   </div>
   {% endfor %}
-  <div class="card">
-    <h3>Volume <span class="badge">{{ volume_label }}</span></h3>
-    <p>Context metric, not weighted into the overall score.</p>
-    <p>{{ analysis.total_loc }} LOC ({{ kloc }} KLOC)</p>
-  </div>
 </section>
 
 <section class="card">
   <h2>Cost &amp; Effort Estimate (COCOMO)</h2>
+  <p>Project type: <strong>{{ cocomo.project_type }}</strong> <span style="font-size:0.8rem;color:#666;">(derived automatically from codebase size - {{ kloc }} KLOC - not user-selected)</span></p>
   <p>Effort: {{ cocomo.effort_pm }} person-months</p>
   <p>Schedule: {{ cocomo.schedule_months }} months</p>
   <p>Implied headcount: {{ cocomo.headcount }}</p>
-  <p><em>Rough order-of-magnitude estimate, not a committed plan.</em></p>
+  <p><em>Rough order-of-magnitude estimate, not a committed plan. The Volume star rating above
+  is also size-derived, informed by this same COCOMO premise that effort scales
+  super-linearly with codebase size - bigger isn't inherently worse quality, but it is
+  more effort to build and maintain.</em></p>
 </section>
 
 <section>
   <h2>Dependency Graph</h2>
-  <iframe src="{{ graph_html_path }}"></iframe>
+  <iframe srcdoc="{{ graph_html }}"></iframe>
 </section>
 
 <section>
@@ -100,7 +157,10 @@
   Each metric's raw score (0.5-5.5) is a piecewise-linear mapping of the LOC-weighted % of code
   in each risk band. Overall score is a weighted average (Unit Complexity 0.25, Duplication/
   Module Coupling/Component Independence 0.20 each, Unit Size 0.15); Volume is excluded from the
-  overall score and reported separately as context.</p>
+  overall score and reported separately as context. Volume's star rating (KLOC): &le;10 Very
+  Small (5&#9733;), &le;50 Small (4&#9733;), &le;300 Medium (3&#9733;), &le;1000 Large (2&#9733;),
+  1000+ Very Large (1&#9733;) - and the COCOMO project type above uses the same KLOC value
+  (&le;50 organic, &le;300 semi-detached, 300+ embedded) rather than a user selection.</p>
   {% if analysis.unparsed_files %}<p>{{ analysis.unparsed_files|length }} file(s) had parse errors; their results may be incomplete.</p>{% endif %}
   {% if analysis.unsupported_files %}<p>{{ analysis.unsupported_files|length }} file(s) had no supported language analyzer and were excluded from all metrics.</p>{% endif %}
 </footer>

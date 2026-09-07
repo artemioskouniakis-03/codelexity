@@ -7,11 +7,10 @@ from pathlib import Path
 
 import streamlit as st
 
-from codelexity.cocomo import ProjectType, estimate
-from codelexity.graph import create_graph, maintainability
+from codelexity.cocomo import estimate
+from codelexity.dependency_graph import build_component_graph, build_file_graph, render_graph_html
 from codelexity.models import Language
 from codelexity.multi_lang import analyze_package_multi_lang
-from codelexity.plot import create_viz
 from codelexity.report import build_report
 from codelexity.scoring import score_analysis
 
@@ -22,7 +21,6 @@ from codelexity.scoring import score_analysis
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-GRAPH_HTML_NAME = "codelexity.html"
 REPORT_HTML_NAME = "codelexity_report.html"
 
 # When running via docker-compose, the target folder is bind-mounted read-only to
@@ -43,8 +41,6 @@ with col1:
     )
 with col2:
     exclude_paths = st.text_input("Exclude paths (comma-separated)", value="node_modules,.venv,bin,dist,build")
-
-project_type = st.selectbox("COCOMO project type", options=[t.value for t in ProjectType], index=0)
 
 
 @contextmanager
@@ -103,48 +99,47 @@ if st.button("Run Analysis", type="primary"):
 
         with timed_step(status, "Estimating COCOMO effort"):
             kloc = analysis.total_loc / 1000
-            cocomo_result = estimate(kloc, ProjectType(project_type))
+            cocomo_result = estimate(kloc)
             logger.info("COCOMO estimate: %s", cocomo_result)
-
-        with timed_step(status, "Rendering dependency graph"):
-            # Existing dependency graph, unchanged - reused by reference from the report.
-            # plot.py's legend reads all four of these analytics keys directly, so all
-            # four must be present even though the new pipeline doesn't compute Halstead
-            # time - total_man_hours is approximated from the COCOMO effort estimate
-            # instead (152 ~= average working hours per person-month).
-            legacy_data = {
-                "analytics": {
-                    "total_lines": analysis.total_loc,
-                    "total_modules": len(analysis.files),
-                    "total_functions": len(analysis.units),
-                    "total_man_hours": round(cocomo_result["effort_pm"] * 152),
-                },
-                "modules": {
-                    f.file: {
-                        "imports": [],
-                        "total_lines": f.loc,
-                        "maintainability_index": 100.0,
-                    }
-                    for f in analysis.files
-                },
-            }
-            graph = create_graph(legacy_data)
-            legacy_data["analytics"]["maintainability_index"] = maintainability(graph)
-            create_viz(legacy_data, graph, GRAPH_HTML_NAME)
-
-        with timed_step(status, "Building HTML report"):
-            generated_at = datetime.now(UTC).isoformat()
-            html = build_report(analysis, scores, cocomo_result, GRAPH_HTML_NAME, generated_at, str(root))
-            Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
 
         elapsed = time.monotonic() - overall_start
         logger.info("Analysis complete in %.2fs", elapsed)
         status.update(label=f"Analysis complete in {elapsed:.2f}s", state="complete", expanded=False)
 
+        # Stored in session_state (not just local variables) so the graph-view toggle
+        # below can re-render just the graph/report on its own rerun, without having to
+        # re-run the whole (potentially slow) analysis again.
+        st.session_state["analysis"] = analysis
+        st.session_state["scores"] = scores
+        st.session_state["cocomo_result"] = cocomo_result
+        st.session_state["root"] = str(root)
         st.success("Analysis complete.")
-        st.components.v1.html(html, height=900, scrolling=True)
-        st.download_button("Download report", data=html, file_name=REPORT_HTML_NAME, mime="text/html")
-    except Exception as exc:  # noqa: BLE001 - UI boundary: last line before a raw Streamlit traceback
+    except Exception:  # noqa: BLE001 - UI boundary: last line before a raw Streamlit traceback
         logger.exception("Analysis failed")
         status.update(label="Analysis failed", state="error")
+        st.error("Analysis failed - see logs for the full traceback.")
+
+if "analysis" in st.session_state:
+    analysis = st.session_state["analysis"]
+    scores = st.session_state["scores"]
+    cocomo_result = st.session_state["cocomo_result"]
+    root_str = st.session_state["root"]
+
+    graph_view = st.radio("Dependency graph view", ["Files", "Components"], horizontal=True, key="graph_view")
+
+    try:
+        with st.spinner(f"Building {graph_view.lower()} dependency graph and report..."):
+            t0 = time.monotonic()
+            graph = build_file_graph(analysis) if graph_view == "Files" else build_component_graph(analysis)
+            graph_html = render_graph_html(graph)
+
+            generated_at = datetime.now(UTC).isoformat()
+            html = build_report(analysis, scores, cocomo_result, graph_html, generated_at, root_str)
+            Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
+            logger.info("Built %s-level graph and report in %.2fs", graph_view.lower(), time.monotonic() - t0)
+
+        st.components.v1.html(html, height=1400, scrolling=True)
+        st.download_button("Download report", data=html, file_name=REPORT_HTML_NAME, mime="text/html")
+    except Exception as exc:  # noqa: BLE001 - UI boundary: last line before a raw Streamlit traceback
+        logger.exception("Report/graph rendering failed")
         st.error(str(exc))

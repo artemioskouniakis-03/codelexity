@@ -5,22 +5,35 @@ from pathlib import Path
 _JS_EXTENSION_PROBE = (".ts", ".tsx", ".js", ".jsx")
 
 
-def _resolve_python(module_path: Path, search_dirs: list[Path]) -> list[Path]:
+def _resolve_python(module_path: Path, search_dirs: list[Path], cache: dict[str, Path | None]) -> list[Path]:
     """Reuses the existing calculations._import_names/_resolve machinery, but with a
     caller-supplied, already-pruned `search_dirs` list instead of calling
     calculations.imports() (which does its own unconditional root.rglob("*") for every
     single file - with a .venv or node_modules present under the analyzed root, that
-    turned a per-repo cost into a per-file one)."""
+    turned a per-repo cost into a per-file one). `cache` is shared across every file in
+    one resolve_edges() call: most files re-import the same handful of stdlib/local
+    modules (logging, pathlib, the project's own package...), and each PathFinder lookup
+    is a filesystem probe per search directory - memoizing by import name turns that back
+    into roughly one probe per distinct name for the whole run, not one per file."""
     from codelexity.calculations import _import_names, _resolve
 
     code = compile(module_path.read_text(encoding="utf-8"), str(module_path), "exec")
-    search = sys.path + [str(d) for d in search_dirs]
+    # Local directories first: if the analyzed repo happens to also be pip-installed in
+    # this environment (as codelexity itself is, in its own Docker image), sys.path would
+    # otherwise resolve imports to that installed copy's path instead of the file actually
+    # being analyzed - silently breaking every edge, since it wouldn't match any analyzed
+    # file. Preferring the local copy is also just the more intuitive behavior generally:
+    # analyze what's actually in the target directory, not a same-named installed package.
+    search = [str(d) for d in search_dirs] + sys.path
     names = {n for n in _import_names(code) if n.split(".")[0] not in sys.builtin_module_names}
     resolved = []
     for name in names:
-        spec = _resolve(name, search)
-        if spec and spec.origin:
-            resolved.append(Path(spec.origin).resolve())
+        if name not in cache:
+            spec = _resolve(name, search)
+            cache[name] = Path(spec.origin).resolve() if spec and spec.origin else None
+        target = cache[name]
+        if target is not None:
+            resolved.append(target)
     return resolved
 
 
@@ -90,12 +103,13 @@ def resolve_edges(
         search_dirs = [p for p in root.rglob("*") if p.is_dir()]
     python_search = [root, *search_dirs]
     java_src_roots = [d for d in search_dirs if d.name == "java"]
+    python_resolve_cache: dict[str, Path | None] = {}
 
     for file, language in files.items():
         module_path = Path(file)
         targets: set[Path] = set()
         if language == "python":
-            targets.update(_resolve_python(module_path, python_search))
+            targets.update(_resolve_python(module_path, python_search, python_resolve_cache))
         else:
             for raw in raw_imports.get(file, []):
                 if language in ("javascript", "typescript"):

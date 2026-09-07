@@ -60,5 +60,6 @@ class AnalysisResult:
     files: tuple[FileMetric, ...]
     components: tuple[ComponentMetric, ...]
     duplicate_blocks: tuple[DuplicateBlock, ...]
+    edges: tuple[tuple[str, str], ...]  # (importer_file, imported_file) - resolved, local-only
     unparsed_files: tuple[str, ...]  # parsed with tree-sitter errors - results may be incomplete
     unsupported_files: tuple[str, ...]  # no registered analyzer for this extension
