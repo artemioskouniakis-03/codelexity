@@ -85,7 +85,6 @@ where:
 The point estimate uses [coupling](https://en.wikipedia.org/wiki/Coupling_(computer_programming)) to estimate how close the project is to the minimum or the maximum of the range.
 
 
-
 ### Example - NetworkX
 
 This is a result for the [`networkx` library](https://networkx.org/en/), a large and complex repo. The command used to create the analysis was:
