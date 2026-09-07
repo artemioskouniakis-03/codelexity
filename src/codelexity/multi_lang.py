@@ -1,4 +1,6 @@
 import logging
+import os
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -12,6 +14,29 @@ from codelexity.models import AnalysisResult, ComponentMetric, DuplicateBlock, F
 from codelexity.units import loc, unit_complexity, unit_size
 
 logger = logging.getLogger(__name__)
+
+
+def _discover(root: Path, exclude: tuple[str, ...]) -> tuple[list[Path], list[Path]]:
+    """Walks `root` once, pruning any directory whose own name is in `exclude` before
+    descending into it - unlike `Path.rglob("*")` followed by a per-file filter, this
+    never enumerates the contents of an excluded directory at all. Matters a lot in
+    practice: a `.venv` or `node_modules` can contain tens of thousands of files, and
+    filtering them out after a full recursive walk still pays the cost of walking them.
+    `include_only` is intentionally NOT used for pruning here - it only loosely matches
+    "any path segment", so pruning by it could incorrectly skip a wanted nested folder;
+    it stays a post-walk filter via is_valid(), same as before.
+
+    Returns (files, dirs) - `dirs` is reused by coupling.resolve_edges() for Python/Java
+    import resolution, so those don't each re-walk the whole tree per file (previously
+    the single biggest cost with a .venv/node_modules present under the analyzed root)."""
+    excluded = set(exclude)
+    files: list[Path] = []
+    dirs: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in excluded]
+        dirs.extend(Path(dirpath) / d for d in dirnames)
+        files.extend(Path(dirpath) / name for name in filenames)
+    return files, dirs
 
 
 def analyze_package_multi_lang(
@@ -38,9 +63,16 @@ def analyze_package_multi_lang(
     unparsed_files: list[str] = []
     unsupported_files: list[str] = []
 
-    all_paths = [p for p in root.rglob("*") if p.is_file()]
+    discover_start = time.monotonic()
+    all_paths, search_dirs = _discover(root, exclude)
     total_paths = len(all_paths)
-    logger.info("Discovered %d files under %s", total_paths, root)
+    logger.info(
+        "Discovered %d files under %s in %.2fs (pruned %s)",
+        total_paths,
+        root,
+        time.monotonic() - discover_start,
+        exclude or "nothing",
+    )
     if on_parse_progress is not None:
         on_parse_progress(0, total_paths)
 
@@ -97,8 +129,10 @@ def analyze_package_multi_lang(
                 )
             )
 
+    resolve_start = time.monotonic()
     logger.info("Resolving cross-file imports (module coupling)...")
-    resolved_edges = resolve_edges(file_language, root, raw_imports, csharp_namespaces)
+    resolved_edges = resolve_edges(file_language, root, raw_imports, csharp_namespaces, search_dirs=search_dirs)
+    logger.info("Resolved cross-file imports in %.2fs", time.monotonic() - resolve_start)
     incoming = module_coupling(resolved_edges, list(file_loc.keys()))
 
     grouped = group_files_by_component(list(file_loc.keys()), root, component_depth)
