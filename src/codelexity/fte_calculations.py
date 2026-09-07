@@ -11,4 +11,4 @@ def maintenance_effort_ftes(total_lines: int, act=0.1, score: float = 0.0):
     a_opt, b_opt = COCOMO_MODES["organic"]
     a_pess, b_pess = COCOMO_MODES["embedded"]
     low, high = round((a_opt * kloc**b_opt) / 12, 1), round((a_pess * kloc**b_pess) / 12, 1)
-    return (low, low + score * (high - low), high)
+    return (low, round(low + score * (high - low), 1), high)
