@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from codelexity.calculations import analyze_package, shorten
+from codelexity.fte_calculations import maintenance_effort_ftes
 from codelexity.graph import coupling, create_graph, maintainability
 from codelexity.plot import create_viz
 
@@ -71,7 +72,12 @@ def main():
     G = create_graph(package_data=data)
     maintainability_index = maintainability(G)
     data["analytics"]["maintainability_index"] = maintainability_index
-    data["analytics"]["coupling_score"] = coupling(G, data)
+    data["analytics"]["coupling_score"] = round(coupling(G, data), 3)
+    min_ftes, ftes, max_ftes = maintenance_effort_ftes(
+        data["analytics"]["total_lines"], score=data["analytics"]["coupling_score"]
+    )
+    data["analytics"]["maintenance_FTEs"] = ftes
+    data["analytics"]["maintenance_FTEs_range"] = (min_ftes, max_ftes)
 
     if not args.absolute:
         # Keys and imports shortened together - create_graph matches edges between the two.
