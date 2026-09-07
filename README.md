@@ -70,6 +70,22 @@ It is easy to understand that a densly connected dependency graph affects the ma
 
 To measure centrality, `codelexity` uses [Katz centrality](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.katz_centrality.html). The centrality value is then multiplied by the module length and normalized by the sum of the respective value in all modules. The corresponding value is used as a weight to compute the total Maintainability Index.
 
+### Maintenance effort estimation
+
+To measure the effort needed (in FTEs), `codelexity` usese the [COCOMO model](https://boehmcsse.org/tools/cocomo-models/). The calculations produce a range ($min$, $max$) according to the basic COCOMO coefficients $a$ and $b$ (with $min$ the coefficients for organic projects where $a=2.4$ and $b=1.05$, and max those for "embedded" projects where $a=3.6$ and $b=1.20$).
+
+$$ E = a \times KLOC^{b}$$
+
+where:
+
+- $a$, $b$ coefficients
+- $KLOC$ the annual size of the codebase changed in thousands of lines (assumed around 10% for maintenance)
+- $E$ the effort in people months
+
+The point estimate uses [coupling](https://en.wikipedia.org/wiki/Coupling_(computer_programming)) to estimate how close the project is to the minimum or the maximum of the range.
+
+
+
 ### Example - NetworkX
 
 This is a result for the [`networkx` library](https://networkx.org/en/), a large and complex repo. The command used to create the analysis was:
