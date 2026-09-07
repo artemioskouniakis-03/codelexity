@@ -30,6 +30,7 @@ def create_viz(package_data: dict, G: nx.DiGraph, fpath: str):
         "font-family:ui-monospace,Consolas,monospace;"
         'letter-spacing:0.2px;font-size:14px;z-index:1000;">'
         '<div style="font-size:20px;margin-bottom:6px;">Codelexity</div>'
+        f"Path: {package_data['path']}<br>"
         f'<div style="font-size:15px;margin-bottom:4px;display:inline-block;'
         f"background:{mi_color(package_data['analytics']['maintainability_index'])}"
         ';color:#333;padding:2px 10px;border-radius:2px;">'

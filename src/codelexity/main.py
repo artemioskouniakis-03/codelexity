@@ -67,6 +67,7 @@ def main():
 
     # analyze code
     data = analyze_package(path, exclude=args.exclude, include_only=args.include_only)
+    data["path"] = shorten(path, Path.cwd()) if not args.absolute else path.as_posix()
     G = create_graph(package_data=data)
     maintainability_index = maintainability(G)
     data["analytics"]["maintainability_index"] = maintainability_index
