@@ -36,6 +36,7 @@ def build_report(
     generated_at: str,
     repo_path: str,
     graph_legend: tuple[tuple[str, str], ...] = (),
+    exclude_tests: bool = True,
 ) -> str:
     """Pure string-in/string-out - no file I/O, no datetime.now() inside. The caller
     writes the returned string to disk. `graph_fragment` is a
@@ -59,6 +60,7 @@ def build_report(
         graph_legend=graph_legend,
         kloc=round(kloc, 2),
         volume_label=volume_size_label,
+        exclude_tests=exclude_tests,
         findings=all_findings(analysis),
         language_scores=score_by_language(analysis),
         # System / Unit / Architecture Level grouping, in that order - confirmed by the

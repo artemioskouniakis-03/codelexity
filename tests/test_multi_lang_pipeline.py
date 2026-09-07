@@ -44,6 +44,22 @@ class TestMultiLangPipeline(unittest.TestCase):
             helper_file = next(f for f in result.files if f.file.endswith("helper.py"))
             self.assertEqual(helper_file.incoming_references, 1)
 
+    def test_test_files_excluded_by_default(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "src").mkdir()
+            (root / "src" / "app.py").write_text("def run():\n    return 1\n")
+            (root / "tests").mkdir()
+            (root / "tests" / "test_app.py").write_text("def test_run():\n    assert True\n")
+            (root / "mocks").mkdir()
+            (root / "mocks" / "fake.py").write_text("def fake():\n    return None\n")
+
+            default_result = analyze_package_multi_lang(root)
+            self.assertEqual({u.qualified_name for u in default_result.units}, {"run"})
+
+            included_result = analyze_package_multi_lang(root, exclude_tests=False)
+            self.assertEqual({u.qualified_name for u in included_result.units}, {"run", "test_run", "fake"})
+
     def test_on_parse_progress_reports_total_up_front_and_reaches_completion(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)

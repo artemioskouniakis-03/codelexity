@@ -46,6 +46,12 @@ with col2:
         "are always excluded, in addition to whatever's listed above."
     )
 
+exclude_tests = st.checkbox("Exclude test files from the analysis", value=True)
+st.caption(
+    "Test files are anything under a tests/, test/, __tests__/, spec/, specs/, mocks/, "
+    "__mocks__/, or fixtures/ path segment."
+)
+
 
 @contextmanager
 def timed_step(status, label: str):
@@ -66,7 +72,13 @@ if st.button("Run Analysis", type="primary"):
         overall_start = time.monotonic()
         root = Path(repo_path).resolve()
         exclude = tuple(p.strip() for p in exclude_paths.split(",") if p.strip())
-        logger.info("Starting analysis of %s (exclude=%s, languages=%s)", root, exclude, include_langs or "all")
+        logger.info(
+            "Starting analysis of %s (exclude=%s, languages=%s, exclude_tests=%s)",
+            root,
+            exclude,
+            include_langs or "all",
+            exclude_tests,
+        )
 
         parse_label = f"Parsing files under `{root}` (exclude: {', '.join(exclude) or 'none'})"
         with timed_step(status, parse_label):
@@ -82,6 +94,7 @@ if st.button("Run Analysis", type="primary"):
                 component_depth=int(depth),
                 exclude=exclude,
                 languages=tuple(include_langs),
+                exclude_tests=exclude_tests,
                 on_parse_progress=on_parse_progress,
             )
             logger.info(
@@ -119,6 +132,7 @@ if st.button("Run Analysis", type="primary"):
         st.session_state["scores"] = scores
         st.session_state["cocomo_result"] = cocomo_result
         st.session_state["root"] = str(root)
+        st.session_state["exclude_tests"] = exclude_tests
         st.success("Analysis complete.")
     except Exception:  # noqa: BLE001 - UI boundary: last line before a raw Streamlit traceback
         logger.exception("Analysis failed")
@@ -130,6 +144,7 @@ if "analysis" in st.session_state:
     scores = st.session_state["scores"]
     cocomo_result = st.session_state["cocomo_result"]
     root_str = st.session_state["root"]
+    exclude_tests_used = st.session_state["exclude_tests"]
 
     graph_view = st.radio("Dependency graph view", ["Files", "Components"], horizontal=True, key="graph_view")
 
@@ -146,7 +161,14 @@ if "analysis" in st.session_state:
 
             generated_at = datetime.now(UTC).isoformat()
             html = build_report(
-                analysis, scores, cocomo_result, graph_fragment, generated_at, root_str, graph_legend=legend
+                analysis,
+                scores,
+                cocomo_result,
+                graph_fragment,
+                generated_at,
+                root_str,
+                graph_legend=legend,
+                exclude_tests=exclude_tests_used,
             )
             Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
             logger.info("Built %s-level graph and report in %.2fs", graph_view.lower(), time.monotonic() - t0)

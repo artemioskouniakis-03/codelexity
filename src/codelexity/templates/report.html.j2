@@ -220,6 +220,8 @@
   semi-detached, 300+ embedded) rather than a user selection.</p>
   <p>Duplication findings share a <code>clone_id</code> across the two rows that make up one
   detected clone pair - filter or sort by it to see both locations of the same duplicate.</p>
+  <p>Test files (tests/, test/, __tests__/, spec/, specs/, mocks/, __mocks__/, fixtures/ path
+  segments) were {{ "excluded from" if exclude_tests else "included in" }} this analysis.</p>
   {% if analysis.unparsed_files %}<p>{{ analysis.unparsed_files|length }} file(s) had parse errors; their results may be incomplete.</p>{% endif %}
   {% if analysis.unsupported_files %}<p>{{ analysis.unsupported_files|length }} file(s) had no supported language analyzer and were excluded from all metrics.</p>{% endif %}
   {% if analysis.skipped_large_files %}<p>{{ analysis.skipped_large_files|length }} file(s) exceeded the size cap and were skipped entirely (never read or parsed) - typically generated/bundled build output, e.g. minified JS.</p>{% endif %}

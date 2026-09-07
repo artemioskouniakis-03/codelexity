@@ -35,6 +35,12 @@ ALWAYS_EXCLUDED_DIRS = frozenset(
 # bundles, which commonly run into multiple megabytes.
 DEFAULT_MAX_FILE_BYTES = 500_000
 
+# Directory names treated as "tests" when exclude_tests=True (the default). Matched the
+# same way as any other exclude entry - by path segment, at any depth - so "tests" also
+# catches "src/tests/", "server/app/tests/unit/", etc. Confirmed by the user: excluded by
+# default, but configurable (exclude_tests=False includes them in the analysis).
+TEST_DIR_NAMES = frozenset({"tests", "test", "__tests__", "spec", "specs", "mocks", "__mocks__", "fixtures"})
+
 
 def _discover(root: Path, exclude: tuple[str, ...]) -> tuple[list[Path], list[Path]]:
     """Walks `root` once, pruning any directory whose own name is in `exclude` (plus
@@ -68,13 +74,20 @@ def analyze_package_multi_lang(
     include_only: tuple[str, ...] = (),
     languages: tuple[str, ...] = (),
     max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
+    exclude_tests: bool = True,
     on_parse_progress: Callable[[int, int], None] | None = None,
 ) -> AnalysisResult:
     """`on_parse_progress(files_done, files_total)`, when given, is called once with
     (0, total) right after file discovery (so a caller can show the total up front before
     any parsing happens) and then periodically while parsing - UI-agnostic, so a caller
-    (e.g. the Streamlit app) can drive a progress bar without this module depending on it."""
+    (e.g. the Streamlit app) can drive a progress bar without this module depending on it.
+
+    `exclude_tests` (default True) additionally excludes TEST_DIR_NAMES on top of
+    whatever's in `exclude` - test code is real code but isn't what "how maintainable is
+    this codebase" is usually asking about, so it's opt-out rather than requiring every
+    caller to remember to list every test-directory convention themselves."""
     root = Path(path).resolve()
+    exclude = tuple(exclude) + tuple(TEST_DIR_NAMES) if exclude_tests else tuple(exclude)
     units: list[UnitMetric] = []
     file_loc: dict[str, int] = {}
     file_language: dict[str, str] = {}

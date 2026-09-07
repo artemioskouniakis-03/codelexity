@@ -32,10 +32,17 @@ parser.add_argument(
 )
 parser.add_argument("--report", help="Write the HTML report to this path.")
 parser.add_argument("--json", dest="json_path", help="Write a machine-readable JSON summary to this path.")
+parser.add_argument(
+    "--include-tests",
+    action="store_true",
+    help="Include test files (tests/, test/, __tests__/, spec/, specs/, mocks/, __mocks__/, "
+    "fixtures/ path segments) in the analysis. Excluded by default.",
+)
 
 
-def _summary(analysis, scores: ScoreReport, cocomo_result: dict) -> dict:
+def _summary(analysis, scores: ScoreReport, cocomo_result: dict, exclude_tests: bool) -> dict:
     return {
+        "exclude_tests": exclude_tests,
         "overall_stars": scores.overall_stars,
         "overall_raw": round(scores.overall_raw, 2),
         "metrics": {
@@ -71,10 +78,11 @@ def main(argv: list[str] | None = None) -> int:
         component_depth=args.component_depth,
         exclude=tuple(args.exclude),
         languages=tuple(args.languages),
+        exclude_tests=not args.include_tests,
     )
     scores = score_analysis(analysis)
     cocomo_result = estimate(analysis.total_loc / 1000)
-    summary = _summary(analysis, scores, cocomo_result)
+    summary = _summary(analysis, scores, cocomo_result, exclude_tests=not args.include_tests)
 
     print(f"Codelexity overall score: {scores.overall_stars} stars ({scores.overall_raw:.2f}/5.5)")
     for name, m in summary["metrics"].items():
@@ -99,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
             datetime.now(UTC).isoformat(),
             str(root),
             graph_legend=file_graph.legend,
+            exclude_tests=not args.include_tests,
         )
         Path(args.report).write_text(html, encoding="utf-8")
         logger.info("Wrote HTML report to %s", args.report)
