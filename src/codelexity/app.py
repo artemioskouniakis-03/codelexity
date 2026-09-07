@@ -108,8 +108,17 @@ if st.button("Run Analysis", type="primary"):
 
         with timed_step(status, "Rendering dependency graph"):
             # Existing dependency graph, unchanged - reused by reference from the report.
+            # plot.py's legend reads all four of these analytics keys directly, so all
+            # four must be present even though the new pipeline doesn't compute Halstead
+            # time - total_man_hours is approximated from the COCOMO effort estimate
+            # instead (152 ~= average working hours per person-month).
             legacy_data = {
-                "analytics": {"total_lines": analysis.total_loc},
+                "analytics": {
+                    "total_lines": analysis.total_loc,
+                    "total_modules": len(analysis.files),
+                    "total_functions": len(analysis.units),
+                    "total_man_hours": round(cocomo_result["effort_pm"] * 152),
+                },
                 "modules": {
                     f.file: {
                         "imports": [],
