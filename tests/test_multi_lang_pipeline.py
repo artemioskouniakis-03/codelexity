@@ -44,6 +44,18 @@ class TestMultiLangPipeline(unittest.TestCase):
             helper_file = next(f for f in result.files if f.file.endswith("helper.py"))
             self.assertEqual(helper_file.incoming_references, 1)
 
+    def test_on_parse_progress_reports_total_up_front_and_reaches_completion(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for i in range(5):
+                (root / f"m{i}.py").write_text(f"x = {i}\n")
+
+            calls: list[tuple[int, int]] = []
+            analyze_package_multi_lang(root, on_parse_progress=lambda done, total: calls.append((done, total)))
+
+            self.assertEqual(calls[0], (0, 5))  # total known before any file is parsed
+            self.assertEqual(calls[-1], (5, 5))  # always reaches 100% at the end
+
     def test_component_depth_zero_is_one_component(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)

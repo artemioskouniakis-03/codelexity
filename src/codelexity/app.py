@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -45,68 +46,91 @@ with col2:
 
 project_type = st.selectbox("COCOMO project type", options=[t.value for t in ProjectType], index=0)
 
+
+@contextmanager
+def timed_step(status, label: str):
+    """Logs and displays `label`, then `label - done in Xs` when the block exits -
+    the per-step timer the UI and docker logs both show."""
+    t0 = time.monotonic()
+    status.write(f"{label}...")
+    logger.info("%s...", label)
+    yield
+    elapsed = time.monotonic() - t0
+    status.write(f"{label} - done in {elapsed:.2f}s")
+    logger.info("%s - done in %.2fs", label, elapsed)
+
+
 if st.button("Run Analysis", type="primary"):
     status = st.status("Analyzing...", expanded=True)
     try:
-        start = time.monotonic()
+        overall_start = time.monotonic()
         root = Path(repo_path).resolve()
         exclude = tuple(p.strip() for p in exclude_paths.split(",") if p.strip())
-
-        status.write(f"Parsing files under `{root}` (exclude: {', '.join(exclude) or 'none'})...")
         logger.info("Starting analysis of %s (exclude=%s, languages=%s)", root, exclude, include_langs or "all")
-        analysis = analyze_package_multi_lang(
-            root,
-            component_depth=int(depth),
-            exclude=exclude,
-            languages=tuple(include_langs),
-        )
-        logger.info(
-            "Parsed %d files (%d units, %d LOC); %d unsupported, %d with parse errors",
-            len(analysis.files),
-            len(analysis.units),
-            analysis.total_loc,
-            len(analysis.unsupported_files),
-            len(analysis.unparsed_files),
-        )
-        status.write(
-            f"Parsed {len(analysis.files)} files, {len(analysis.units)} units, {analysis.total_loc} LOC "
-            f"({len(analysis.unsupported_files)} unsupported, {len(analysis.unparsed_files)} parse errors)."
-        )
 
-        status.write("Scoring metrics...")
-        scores = score_analysis(analysis)
-        logger.info("Overall score: %.2f (%d stars)", scores.overall_raw, scores.overall_stars)
+        parse_label = f"Parsing files under `{root}` (exclude: {', '.join(exclude) or 'none'})"
+        with timed_step(status, parse_label):
+            progress_bar = st.progress(0.0)
+            progress_text = st.empty()
 
-        status.write("Estimating COCOMO effort...")
-        kloc = analysis.total_loc / 1000
-        cocomo_result = estimate(kloc, ProjectType(project_type))
-        logger.info("COCOMO estimate: %s", cocomo_result)
+            def on_parse_progress(done: int, total: int) -> None:
+                progress_bar.progress(done / total if total else 1.0)
+                progress_text.write(f"{done}/{total} files parsed")
 
-        status.write("Rendering dependency graph...")
-        # Existing dependency graph, unchanged - reused by reference from the report.
-        legacy_data = {
-            "analytics": {"total_lines": analysis.total_loc},
-            "modules": {
-                f.file: {
-                    "imports": [],
-                    "total_lines": f.loc,
-                    "maintainability_index": 100.0,
-                }
-                for f in analysis.files
-            },
-        }
-        graph = create_graph(legacy_data)
-        legacy_data["analytics"]["maintainability_index"] = maintainability(graph)
-        create_viz(legacy_data, graph, GRAPH_HTML_NAME)
+            analysis = analyze_package_multi_lang(
+                root,
+                component_depth=int(depth),
+                exclude=exclude,
+                languages=tuple(include_langs),
+                on_parse_progress=on_parse_progress,
+            )
+            logger.info(
+                "Parsed %d files (%d units, %d LOC); %d unsupported, %d with parse errors",
+                len(analysis.files),
+                len(analysis.units),
+                analysis.total_loc,
+                len(analysis.unsupported_files),
+                len(analysis.unparsed_files),
+            )
+            status.write(
+                f"{len(analysis.files)} files, {len(analysis.units)} units, {analysis.total_loc} LOC "
+                f"({len(analysis.unsupported_files)} unsupported, {len(analysis.unparsed_files)} parse errors)."
+            )
 
-        status.write("Building HTML report...")
-        generated_at = datetime.now(UTC).isoformat()
-        html = build_report(analysis, scores, cocomo_result, GRAPH_HTML_NAME, generated_at, str(root))
-        Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
+        with timed_step(status, "Scoring metrics"):
+            scores = score_analysis(analysis)
+            logger.info("Overall score: %.2f (%d stars)", scores.overall_raw, scores.overall_stars)
 
-        elapsed = time.monotonic() - start
-        logger.info("Analysis complete in %.1fs", elapsed)
-        status.update(label=f"Analysis complete in {elapsed:.1f}s", state="complete", expanded=False)
+        with timed_step(status, "Estimating COCOMO effort"):
+            kloc = analysis.total_loc / 1000
+            cocomo_result = estimate(kloc, ProjectType(project_type))
+            logger.info("COCOMO estimate: %s", cocomo_result)
+
+        with timed_step(status, "Rendering dependency graph"):
+            # Existing dependency graph, unchanged - reused by reference from the report.
+            legacy_data = {
+                "analytics": {"total_lines": analysis.total_loc},
+                "modules": {
+                    f.file: {
+                        "imports": [],
+                        "total_lines": f.loc,
+                        "maintainability_index": 100.0,
+                    }
+                    for f in analysis.files
+                },
+            }
+            graph = create_graph(legacy_data)
+            legacy_data["analytics"]["maintainability_index"] = maintainability(graph)
+            create_viz(legacy_data, graph, GRAPH_HTML_NAME)
+
+        with timed_step(status, "Building HTML report"):
+            generated_at = datetime.now(UTC).isoformat()
+            html = build_report(analysis, scores, cocomo_result, GRAPH_HTML_NAME, generated_at, str(root))
+            Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
+
+        elapsed = time.monotonic() - overall_start
+        logger.info("Analysis complete in %.2fs", elapsed)
+        status.update(label=f"Analysis complete in {elapsed:.2f}s", state="complete", expanded=False)
 
         st.success("Analysis complete.")
         st.components.v1.html(html, height=900, scrolling=True)

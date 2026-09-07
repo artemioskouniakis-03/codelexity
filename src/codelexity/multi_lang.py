@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from codelexity.calculations import is_valid
@@ -21,7 +22,12 @@ def analyze_package_multi_lang(
     exclude: tuple[str, ...] = (),
     include_only: tuple[str, ...] = (),
     languages: tuple[str, ...] = (),
+    on_parse_progress: Callable[[int, int], None] | None = None,
 ) -> AnalysisResult:
+    """`on_parse_progress(files_done, files_total)`, when given, is called once with
+    (0, total) right after file discovery (so a caller can show the total up front before
+    any parsing happens) and then periodically while parsing - UI-agnostic, so a caller
+    (e.g. the Streamlit app) can drive a progress bar without this module depending on it."""
     root = Path(path).resolve()
     units: list[UnitMetric] = []
     file_loc: dict[str, int] = {}
@@ -33,10 +39,17 @@ def analyze_package_multi_lang(
     unsupported_files: list[str] = []
 
     all_paths = [p for p in root.rglob("*") if p.is_file()]
-    logger.info("Discovered %d files under %s", len(all_paths), root)
+    total_paths = len(all_paths)
+    logger.info("Discovered %d files under %s", total_paths, root)
+    if on_parse_progress is not None:
+        on_parse_progress(0, total_paths)
+
+    progress_step = max(total_paths // 100, 1)  # ~100 UI updates over the whole run, regardless of repo size
     for index, file_path in enumerate(all_paths, start=1):
-        if index % 200 == 0 or index == len(all_paths):
-            logger.info("Parsed %d/%d files...", index, len(all_paths))
+        if index % 200 == 0 or index == total_paths:
+            logger.info("Parsed %d/%d files...", index, total_paths)
+        if on_parse_progress is not None and (index % progress_step == 0 or index == total_paths):
+            on_parse_progress(index, total_paths)
         posix = file_path.resolve().as_posix()
         if not is_valid(posix, exclude, include_only):
             continue
