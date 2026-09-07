@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Codelexity Report</title>
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1, h2 { margin-bottom: 0.3rem; }
+  .stars { color: #d9a441; font-size: 1.6rem; letter-spacing: 2px; }
+  .card { border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; margin: 10px 0; }
+  .band-bar { display: flex; height: 10px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .band-low { background: #6cc06c; }
+  .band-medium { background: #e0d15a; }
+  .band-high { background: #e0965a; }
+  .band-very_high { background: #d05151; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  td, th { border: 1px solid #ddd; padding: 4px 8px; text-align: left; font-size: 0.85rem; }
+  iframe { width: 100%; height: 600px; border: 1px solid #ddd; }
+  .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 2px 8px; font-size: 0.85rem; }
+  footer { font-size: 0.8rem; color: #666; margin-top: 2rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Codelexity Report</h1>
+  <p>Repository: <code>{{ repo_path }}</code><br>
+     Generated: {{ generated_at }}<br>
+     COCOMO project type: {{ cocomo.project_type }}</p>
+</header>
+
+<section class="card">
+  <h2>Overall Score</h2>
+  <div class="stars">{{ "★" * scores.overall_stars }}{{ "☆" * (5 - scores.overall_stars) }}</div>
+  <p>Raw score: {{ "%.2f"|format(scores.overall_raw) }} / 5.5</p>
+</section>
+
+<section>
+  <h2>Per-metric Breakdown</h2>
+  {% for label, score, description in metric_cards %}
+  <div class="card">
+    <h3>{{ label }} <span class="stars" style="font-size:1rem;">{{ "★" * score.stars }}{{ "☆" * (5 - score.stars) }}</span></h3>
+    <p>{{ description }}</p>
+    <p>{{ "%.1f"|format(score.severity_pct) }}% of code in Very-High/High risk-weighted severity (raw score {{ "%.2f"|format(score.raw_score) }})</p>
+    <div class="band-bar">
+      {% for band, pct in score.band_distribution.items() %}
+      <div class="band-{{ band }}" style="width: {{ pct }}%;" title="{{ band }}: {{ '%.1f'|format(pct) }}%"></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  <div class="card">
+    <h3>Volume <span class="badge">{{ volume_label }}</span></h3>
+    <p>Context metric, not weighted into the overall score.</p>
+    <p>{{ analysis.total_loc }} LOC ({{ kloc }} KLOC)</p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Cost &amp; Effort Estimate (COCOMO)</h2>
+  <p>Effort: {{ cocomo.effort_pm }} person-months</p>
+  <p>Schedule: {{ cocomo.schedule_months }} months</p>
+  <p>Implied headcount: {{ cocomo.headcount }}</p>
+  <p><em>Rough order-of-magnitude estimate, not a committed plan.</em></p>
+</section>
+
+<section>
+  <h2>Dependency Graph</h2>
+  <iframe src="{{ graph_html_path }}"></iframe>
+</section>
+
+<section>
+  <h2>Drill-down</h2>
+  <details>
+    <summary>Components ({{ analysis.components|length }})</summary>
+    <table>
+      <tr><th>Component</th><th>LOC</th><th>Files</th><th>Independence</th></tr>
+      {% for c in analysis.components %}
+      <tr><td>{{ c.name }}</td><td>{{ c.loc }}</td><td>{{ c.file_count }}</td><td>{{ "%.2f"|format(c.independence_score) }}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+  <details>
+    <summary>Files ({{ analysis.files|length }})</summary>
+    <table>
+      <tr><th>File</th><th>Language</th><th>LOC</th><th>Incoming refs</th><th>Duplicate LOC</th></tr>
+      {% for f in analysis.files %}
+      <tr><td>{{ f.file }}</td><td>{{ f.language }}</td><td>{{ f.loc }}</td><td>{{ f.incoming_references }}</td><td>{{ f.duplicate_loc }}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+</section>
+
+<footer>
+  <p><strong>Methodology.</strong> Unit Size (LOC): 1-15 Low, 16-30 Medium, 31-60 High, 61+ Very High.
+  Unit Complexity (McCabe): 1-5 Low, 6-10 Medium, 11-25 High, 26+ Very High.
+  Module Coupling (incoming refs): 0-10 Low, 11-20 Medium, 21-50 High, 51+ Very High.
+  Duplication and Component Independence bands are proposed heuristics (modeled on SonarQube's
+  duplication convention and an 80%-cohesion rule of thumb, respectively), not user-specified.
+  Each metric's raw score (0.5-5.5) is a piecewise-linear mapping of the LOC-weighted % of code
+  in each risk band. Overall score is a weighted average (Unit Complexity 0.25, Duplication/
+  Module Coupling/Component Independence 0.20 each, Unit Size 0.15); Volume is excluded from the
+  overall score and reported separately as context.</p>
+  {% if analysis.unparsed_files %}<p>{{ analysis.unparsed_files|length }} file(s) had parse errors; their results may be incomplete.</p>{% endif %}
+  {% if analysis.unsupported_files %}<p>{{ analysis.unsupported_files|length }} file(s) had no supported language analyzer and were excluded from all metrics.</p>{% endif %}
+</footer>
+
+</body>
+</html>
