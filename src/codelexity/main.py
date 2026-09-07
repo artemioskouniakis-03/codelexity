@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from codelexity.calculations import analyze_package, shorten
-from codelexity.graph import create_graph, maintainability
+from codelexity.graph import coupling, create_graph, maintainability
 from codelexity.plot import create_viz
 
 HTML_NAME = "codelexity.html"
@@ -71,6 +71,7 @@ def main():
     G = create_graph(package_data=data)
     maintainability_index = maintainability(G)
     data["analytics"]["maintainability_index"] = maintainability_index
+    data["analytics"]["coupling_score"] = coupling(G, data)
 
     if not args.absolute:
         # Keys and imports shortened together - create_graph matches edges between the two.
