@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -13,6 +14,11 @@ from codelexity.plot import create_viz
 from codelexity.report import build_report
 from codelexity.scoring import score_analysis
 
+# Configure logging once so INFO-level progress messages actually reach a handler and show
+# up in `docker logs` (or the terminal, running natively). Streamlit reruns this whole
+# script on every interaction; basicConfig() is a no-op if the root logger already has a
+# handler, so this stays safe across reruns.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 GRAPH_HTML_NAME = "codelexity.html"
@@ -40,44 +46,72 @@ with col2:
 project_type = st.selectbox("COCOMO project type", options=[t.value for t in ProjectType], index=0)
 
 if st.button("Run Analysis", type="primary"):
+    status = st.status("Analyzing...", expanded=True)
     try:
-        with st.spinner("Analyzing..."):
-            root = Path(repo_path).resolve()
-            exclude = tuple(p.strip() for p in exclude_paths.split(",") if p.strip())
+        start = time.monotonic()
+        root = Path(repo_path).resolve()
+        exclude = tuple(p.strip() for p in exclude_paths.split(",") if p.strip())
 
-            analysis = analyze_package_multi_lang(
-                root,
-                component_depth=int(depth),
-                exclude=exclude,
-                languages=tuple(include_langs),
-            )
-            scores = score_analysis(analysis)
-            kloc = analysis.total_loc / 1000
-            cocomo_result = estimate(kloc, ProjectType(project_type))
+        status.write(f"Parsing files under `{root}` (exclude: {', '.join(exclude) or 'none'})...")
+        logger.info("Starting analysis of %s (exclude=%s, languages=%s)", root, exclude, include_langs or "all")
+        analysis = analyze_package_multi_lang(
+            root,
+            component_depth=int(depth),
+            exclude=exclude,
+            languages=tuple(include_langs),
+        )
+        logger.info(
+            "Parsed %d files (%d units, %d LOC); %d unsupported, %d with parse errors",
+            len(analysis.files),
+            len(analysis.units),
+            analysis.total_loc,
+            len(analysis.unsupported_files),
+            len(analysis.unparsed_files),
+        )
+        status.write(
+            f"Parsed {len(analysis.files)} files, {len(analysis.units)} units, {analysis.total_loc} LOC "
+            f"({len(analysis.unsupported_files)} unsupported, {len(analysis.unparsed_files)} parse errors)."
+        )
 
-            # Existing dependency graph, unchanged - reused by reference from the report.
-            legacy_data = {
-                "analytics": {"total_lines": analysis.total_loc},
-                "modules": {
-                    f.file: {
-                        "imports": [],
-                        "total_lines": f.loc,
-                        "maintainability_index": 100.0,
-                    }
-                    for f in analysis.files
-                },
-            }
-            graph = create_graph(legacy_data)
-            legacy_data["analytics"]["maintainability_index"] = maintainability(graph)
-            create_viz(legacy_data, graph, GRAPH_HTML_NAME)
+        status.write("Scoring metrics...")
+        scores = score_analysis(analysis)
+        logger.info("Overall score: %.2f (%d stars)", scores.overall_raw, scores.overall_stars)
 
-            generated_at = datetime.now(UTC).isoformat()
-            html = build_report(analysis, scores, cocomo_result, GRAPH_HTML_NAME, generated_at, str(root))
-            Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
+        status.write("Estimating COCOMO effort...")
+        kloc = analysis.total_loc / 1000
+        cocomo_result = estimate(kloc, ProjectType(project_type))
+        logger.info("COCOMO estimate: %s", cocomo_result)
+
+        status.write("Rendering dependency graph...")
+        # Existing dependency graph, unchanged - reused by reference from the report.
+        legacy_data = {
+            "analytics": {"total_lines": analysis.total_loc},
+            "modules": {
+                f.file: {
+                    "imports": [],
+                    "total_lines": f.loc,
+                    "maintainability_index": 100.0,
+                }
+                for f in analysis.files
+            },
+        }
+        graph = create_graph(legacy_data)
+        legacy_data["analytics"]["maintainability_index"] = maintainability(graph)
+        create_viz(legacy_data, graph, GRAPH_HTML_NAME)
+
+        status.write("Building HTML report...")
+        generated_at = datetime.now(UTC).isoformat()
+        html = build_report(analysis, scores, cocomo_result, GRAPH_HTML_NAME, generated_at, str(root))
+        Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
+
+        elapsed = time.monotonic() - start
+        logger.info("Analysis complete in %.1fs", elapsed)
+        status.update(label=f"Analysis complete in {elapsed:.1f}s", state="complete", expanded=False)
 
         st.success("Analysis complete.")
         st.components.v1.html(html, height=900, scrolling=True)
         st.download_button("Download report", data=html, file_name=REPORT_HTML_NAME, mime="text/html")
     except Exception as exc:  # noqa: BLE001 - UI boundary: last line before a raw Streamlit traceback
         logger.exception("Analysis failed")
+        status.update(label="Analysis failed", state="error")
         st.error(str(exc))

@@ -33,7 +33,10 @@ def analyze_package_multi_lang(
     unsupported_files: list[str] = []
 
     all_paths = [p for p in root.rglob("*") if p.is_file()]
-    for file_path in all_paths:
+    logger.info("Discovered %d files under %s", len(all_paths), root)
+    for index, file_path in enumerate(all_paths, start=1):
+        if index % 200 == 0 or index == len(all_paths):
+            logger.info("Parsed %d/%d files...", index, len(all_paths))
         posix = file_path.resolve().as_posix()
         if not is_valid(posix, exclude, include_only):
             continue
@@ -81,6 +84,7 @@ def analyze_package_multi_lang(
                 )
             )
 
+    logger.info("Resolving cross-file imports (module coupling)...")
     resolved_edges = resolve_edges(file_language, root, raw_imports, csharp_namespaces)
     incoming = module_coupling(resolved_edges, list(file_loc.keys()))
 
@@ -88,8 +92,12 @@ def analyze_package_multi_lang(
     component_of = {f: c for c, files in grouped.items() for f in files}
     ce, ca = component_edges(resolved_edges, component_of)
 
+    logger.info(
+        "Scanning for duplicate code across %d files (min_tokens=%d)...", len(file_tokens), duplication_min_tokens
+    )
     duplicate_blocks_raw = find_duplicate_blocks(file_tokens, min_tokens=duplication_min_tokens)
     covered_lines = duplicate_loc_per_file(duplicate_blocks_raw)
+    logger.info("Found %d duplicate block(s)", len(duplicate_blocks_raw))
 
     files: list[FileMetric] = []
     for posix, total in file_loc.items():
