@@ -89,8 +89,17 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("Wrote JSON summary to %s", args.json_path)
 
     if args.report:
-        graph_fragment = render_graph_fragment(build_file_graph(analysis))
-        html = build_report(analysis, scores, cocomo_result, graph_fragment, datetime.now(UTC).isoformat(), str(root))
+        file_graph = build_file_graph(analysis)
+        graph_fragment = render_graph_fragment(file_graph.graph)
+        html = build_report(
+            analysis,
+            scores,
+            cocomo_result,
+            graph_fragment,
+            datetime.now(UTC).isoformat(),
+            str(root),
+            graph_legend=file_graph.legend,
+        )
         Path(args.report).write_text(html, encoding="utf-8")
         logger.info("Wrote HTML report to %s", args.report)
 

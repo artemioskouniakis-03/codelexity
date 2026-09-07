@@ -136,11 +136,18 @@ if "analysis" in st.session_state:
     try:
         with st.spinner(f"Building {graph_view.lower()} dependency graph and report..."):
             t0 = time.monotonic()
-            graph = build_file_graph(analysis) if graph_view == "Files" else build_component_graph(analysis)
-            graph_fragment = render_graph_fragment(graph)
+            if graph_view == "Files":
+                file_graph = build_file_graph(analysis)
+                graph, legend = file_graph.graph, file_graph.legend
+                graph_fragment = render_graph_fragment(graph, spacious=False)
+            else:
+                graph, legend = build_component_graph(analysis), ()
+                graph_fragment = render_graph_fragment(graph, spacious=True)
 
             generated_at = datetime.now(UTC).isoformat()
-            html = build_report(analysis, scores, cocomo_result, graph_fragment, generated_at, root_str)
+            html = build_report(
+                analysis, scores, cocomo_result, graph_fragment, generated_at, root_str, graph_legend=legend
+            )
             Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
             logger.info("Built %s-level graph and report in %.2fs", graph_view.lower(), time.monotonic() - t0)
 

@@ -46,7 +46,15 @@ class TestBuildReport(unittest.TestCase):
         cocomo = {"project_type": "organic", "kloc": 0.005, "effort_pm": 0.1, "schedule_months": 0.5, "headcount": 1}
         graph_fragment = GraphFragment(head='<script src="vis-network.js"></script>', body='<div id="mynetwork"></div>')
 
-        html = build_report(analysis, scores, cocomo, graph_fragment, "2026-01-01T00:00:00Z", "/repo")
+        html = build_report(
+            analysis,
+            scores,
+            cocomo,
+            graph_fragment,
+            "2026-01-01T00:00:00Z",
+            "/repo",
+            graph_legend=(("comp-a", "#4C78A8"),),
+        )
 
         self.assertIn("downloadFindingsCSV", html)
         self.assertIn("downloadAllFindingsXlsx", html)
@@ -58,6 +66,21 @@ class TestBuildReport(unittest.TestCase):
         self.assertIn("Unit Level Metrics", html)
         self.assertIn("Architecture Level Metrics", html)
         self.assertIn("clone_id", html)  # duplication findings methodology note
+        self.assertIn("comp-a", html)  # graph legend entry
+        self.assertIn("#4C78A8", html)
+        self.assertIn("Scores by Technology", html)
+        self.assertIn("python", html)  # per-language score section
+
+    def test_report_works_without_a_graph_legend(self):
+        analysis = _analysis()
+        scores = score_analysis(analysis)
+        cocomo = {"project_type": "organic", "kloc": 0.005, "effort_pm": 0.1, "schedule_months": 0.5, "headcount": 1}
+        graph_fragment = GraphFragment(head="", body="<div>component graph</div>")
+
+        html = build_report(analysis, scores, cocomo, graph_fragment, "2026-01-01T00:00:00Z", "/repo")
+
+        self.assertIn("component graph", html)
+        self.assertNotIn('<span class="swatch"', html)  # no legend rendered when graph_legend is empty
 
 
 if __name__ == "__main__":
