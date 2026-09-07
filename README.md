@@ -57,6 +57,37 @@ The folder at `REPO_PATH` is bind-mounted read-only into the container at `/work
 the Streamlit UI's "Repository path" field defaults to it automatically. Once running, open
 <http://localhost:8501> in your browser.
 
+> [!WARNING]
+> **On Windows, prefer running natively for large local repositories.** Docker Desktop's
+> Windows bind mount has significant per-file I/O overhead - on a real ~2,000-file monorepo,
+> a run that took ~47 seconds natively took several minutes longer through the bind mount,
+> purely from the filesystem access pattern (directory walks, file reads, import resolution)
+> crossing the Windows/container boundary. This is specific to Docker Desktop on Windows;
+> it isn't a concern on Linux hosts or in CI (see below), where Docker has no such penalty.
+>
+> To run natively instead (same UI, same code, just reading your filesystem directly):
+> ```bash
+> uv sync --extra multi-lang --extra ui
+> uv run streamlit run src/codelexity/app.py
+> ```
+> Keep Docker for CI, for sharing the tool with someone without a Python/`uv` setup, or when
+> running on Linux/macOS, where it's the more convenient option with no performance downside.
+
+## Continuous Integration
+
+For a headless, CI-friendly check that fails a build below a quality threshold, use the
+`codelexity-ci` command instead of the Streamlit UI:
+
+```bash
+pip install "codelexity[multi-lang,ci]"
+codelexity-ci . --min-stars 3.0 --report codelexity_report.html --json codelexity_summary.json
+```
+
+It exits non-zero when the overall score is below `--min-stars` (default `3.0`). See
+[`.github/workflows/codelexity-quality.yml`](.github/workflows/codelexity-quality.yml) for a
+working GitHub Actions example that runs this on every pull request and uploads the report
+and JSON summary as build artifacts.
+
 ## Intuition
 
 There's a ton of literature describing the relationship between complexity and maintainability of code.
