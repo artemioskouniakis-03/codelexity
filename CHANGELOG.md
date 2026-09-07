@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 — 2026-09-07
+
+- Fixing bug with relative paths
+- Fixing COCOMO bug
+
 ## 0.4.0 — 2026-09-07
 
 - Added coupling calculations using `nx.descendants`
