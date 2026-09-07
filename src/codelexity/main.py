@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from codelexity.calculations import analyze_package, shorten
@@ -36,6 +37,22 @@ parser.add_argument(
     help="Provide a list of packages/modules to exclude.",
 )
 parser.add_argument("-a", "--absolute", action="store_true", help="If added all paths will be absolute.")
+parser.add_argument(
+    "--max",
+    nargs=2,
+    action="append",
+    default=[],
+    metavar=("KEY", "VALUE"),
+    help="Exit non-zero if this analytics value exceeds VALUE, e.g. `--max total_lines 500`. Repeatable.",
+)
+parser.add_argument(
+    "--min",
+    nargs=2,
+    action="append",
+    default=[],
+    metavar=("KEY", "VALUE"),
+    help="Exit non-zero if this analytics value falls below VALUE, e.g. `--min maintainability_index 40`. Repeatable.",
+)
 
 
 def main():
@@ -55,7 +72,7 @@ def main():
     data["analytics"]["maintainability_index"] = maintainability_index
 
     if not args.absolute:
-        # Keys and imports shortened together — create_graph matches edges between the two.
+        # Keys and imports shortened together - create_graph matches edges between the two.
         data["modules"] = {
             shorten(Path(mod), path): {**d, "imports": [shorten(Path(i), path) for i in d["imports"]]}
             for mod, d in data["modules"].items()
@@ -70,6 +87,20 @@ def main():
 
     if not (args.plot or args.json):
         print(data["analytics"])
+
+    sys_exit = ""
+    for limit in ["max", "min"]:
+        for key, value in vars(args)[limit]:
+            key_ = key if key in data["analytics"] else key.replace("-", "_")
+            if key_ not in data["analytics"]:
+                print(f"skipping {key_}")
+                continue
+            if limit == "max" and data["analytics"][key_] > float(value):
+                sys_exit += f"{key} {data['analytics'][key_]} exceeds the maximum allowed value of {value}\n"
+            elif limit == "min" and data["analytics"][key_] < float(value):
+                sys_exit += f"{key} {data['analytics'][key_]} is below the minimum allowed value of {value}\n"
+    if sys_exit:
+        sys.exit(sys_exit)
 
 
 if __name__ == "__main__":
