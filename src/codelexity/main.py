@@ -88,19 +88,25 @@ def main():
     if not (args.plot or args.json):
         print(data["analytics"])
 
-    sys_exit = ""
-    for limit in ["max", "min"]:
-        for key, value in vars(args)[limit]:
-            key_ = key if key in data["analytics"] else key.replace("-", "_")
-            if key_ not in data["analytics"]:
+    error = check_thresholds(data["analytics"], args.max, args.min)
+    if error:
+        sys.exit(error)
+
+
+def check_thresholds(analytics: dict, max_args: list, min_args: list) -> str:
+    """Return an error message if any analytics value breaks a --max/--min bound, else "" ."""
+    error = ""
+    for limit, bounds in [("max", max_args), ("min", min_args)]:
+        for key, value in bounds:
+            key_ = key if key in analytics else key.replace("-", "_")
+            if key_ not in analytics:
                 print(f"skipping {key_}")
                 continue
-            if limit == "max" and data["analytics"][key_] > float(value):
-                sys_exit += f"{key} {data['analytics'][key_]} exceeds the maximum allowed value of {value}\n"
-            elif limit == "min" and data["analytics"][key_] < float(value):
-                sys_exit += f"{key} {data['analytics'][key_]} is below the minimum allowed value of {value}\n"
-    if sys_exit:
-        sys.exit(sys_exit)
+            if limit == "max" and analytics[key_] > float(value):
+                error += f"{key} {analytics[key_]} exceeds the maximum allowed value of {value}\n"
+            elif limit == "min" and analytics[key_] < float(value):
+                error += f"{key} {analytics[key_]} is below the minimum allowed value of {value}\n"
+    return error
 
 
 if __name__ == "__main__":
