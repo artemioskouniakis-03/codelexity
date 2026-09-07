@@ -26,6 +26,36 @@ _Codelexity HTML report on the `codelexity` repo_
 uvx --python 3.11 codelexity <my-package-path>
 ```
 
+## Multi-language scoring, COCOMO & the Streamlit UI
+
+Beyond the CLI above, `codelexity` also ships an additive analysis pipeline covering
+Duplication, Unit Size, Unit Complexity, Module Coupling, Component Independence and Volume
+across Python, C#, Java, JavaScript, TypeScript, React and Angular, a star-rating quality
+score, a COCOMO effort estimate, and a lightweight Streamlit UI that generates an HTML
+report. Install the extra dependencies with `uv sync --extra multi-lang --extra ui`, then
+run `uv run streamlit run src/codelexity/app.py`.
+
+### Running with Docker
+
+A `Dockerfile` and `docker-compose.yml` are included so you can build and run the Streamlit
+UI locally without installing Python or `uv` yourself.
+
+```bash
+# Build and start the UI, analyzing the current directory by default:
+docker compose up --build
+
+# Analyze a different local folder instead - set REPO_PATH before starting:
+REPO_PATH=/path/to/your/repo docker compose up --build
+```
+
+> [!NOTE]
+> On Windows PowerShell, set the variable first: `$env:REPO_PATH="C:\path\to\your\repo"; docker compose up --build`.
+> You can also create a `.env` file next to `docker-compose.yml` containing `REPO_PATH=/path/to/your/repo`
+> instead of setting it inline each time.
+
+The folder at `REPO_PATH` is bind-mounted read-only into the container at `/workspace`, and
+the Streamlit UI's "Repository path" field defaults to it automatically. Once running, open
+<http://localhost:8501> in your browser.
 
 ## Intuition
 

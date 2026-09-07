@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,9 +18,15 @@ logger = logging.getLogger(__name__)
 GRAPH_HTML_NAME = "codelexity.html"
 REPORT_HTML_NAME = "codelexity_report.html"
 
+# When running via docker-compose, the target folder is bind-mounted read-only to
+# /workspace (see docker-compose.yml) and CODELEXITY_DEFAULT_PATH is set to match, so the
+# field below defaults to it. Running natively (not in Docker), this env var is unset and
+# the field falls back to the current directory, same as before.
+DEFAULT_REPO_PATH = os.environ.get("CODELEXITY_DEFAULT_PATH", ".")
+
 st.title("Codelexity")
 
-repo_path = st.text_input("Repository path", value=".")
+repo_path = st.text_input("Repository path", value=DEFAULT_REPO_PATH)
 depth = st.number_input("Component grouping depth", min_value=0, value=1, step=1)
 
 col1, col2 = st.columns(2)

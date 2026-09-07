@@ -1,0 +1,13 @@
+services:
+  codelexity:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mounts the folder you want analyzed into the container at a fixed path.
+      # Set REPO_PATH before running (e.g. `REPO_PATH=/path/to/your/repo docker compose up`,
+      # or create a .env file next to this one containing `REPO_PATH=/path/to/your/repo`);
+      # defaults to the current directory (this repo) if unset.
+      - ${REPO_PATH:-.}:/workspace:ro
+    environment:
+      - CODELEXITY_DEFAULT_PATH=/workspace
