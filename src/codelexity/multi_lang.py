@@ -15,14 +15,25 @@ from codelexity.units import loc, unit_complexity, unit_size
 
 logger = logging.getLogger(__name__)
 
-# Always pruned, regardless of the caller's exclude list - VCS metadata directories are
-# never useful to analyze, and .git in particular can hold hundreds of subdirectories
-# under objects/, refs/, logs/. Once those directories feed into Python/Java import
-# resolution's search path (coupling.resolve_edges), that turns into a severe performance
-# regression (every external/stdlib import lookup has to probe each of them first) rather
-# than just wasted analysis time - worth hardcoding rather than relying on every caller
-# remembering to pass it as an exclude.
-ALWAYS_EXCLUDED_DIRS = frozenset({".git", ".hg", ".svn"})
+# Always pruned, regardless of the caller's exclude list - none of these are ever source
+# code worth analyzing (VCS metadata, tool caches, framework build output), and a user
+# who doesn't think to exclude them can otherwise turn a normal analysis into a very slow
+# one: .git can hold hundreds of subdirectories under objects/, refs/, logs/ (each one
+# feeding into Python/Java import resolution's search path once it's discovered, since
+# every external/stdlib import lookup then has to probe it first); .next/dist-style build
+# output routinely contains multi-megabyte minified/bundled JS files that are individually
+# expensive to run through every metric pass, for a file nobody hand-authors anyway.
+ALWAYS_EXCLUDED_DIRS = frozenset(
+    {".git", ".hg", ".svn", ".next", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".turbo"}
+)
+
+# Files larger than this are skipped entirely (not read past a stat() call) rather than
+# run through parsing/units/tokenization - a defense-in-depth backstop for generated or
+# bundled files that live somewhere ALWAYS_EXCLUDED_DIRS/the caller's exclude list didn't
+# anticipate (e.g. a checked-in vendor bundle sitting directly under src/). 500 KB is
+# comfortably above any hand-authored source file while well below typical minified
+# bundles, which commonly run into multiple megabytes.
+DEFAULT_MAX_FILE_BYTES = 500_000
 
 
 def _discover(root: Path, exclude: tuple[str, ...]) -> tuple[list[Path], list[Path]]:
@@ -56,6 +67,7 @@ def analyze_package_multi_lang(
     exclude: tuple[str, ...] = (),
     include_only: tuple[str, ...] = (),
     languages: tuple[str, ...] = (),
+    max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
     on_parse_progress: Callable[[int, int], None] | None = None,
 ) -> AnalysisResult:
     """`on_parse_progress(files_done, files_total)`, when given, is called once with
@@ -71,6 +83,7 @@ def analyze_package_multi_lang(
     file_tokens = {}
     unparsed_files: list[str] = []
     unsupported_files: list[str] = []
+    skipped_large_files: list[str] = []
 
     discover_start = time.monotonic()
     all_paths, search_dirs = _discover(root, exclude)
@@ -100,6 +113,14 @@ def analyze_package_multi_lang(
                 unsupported_files.append(posix)
             continue
         if languages and analyzer.language_id not in languages:
+            continue
+        try:
+            if file_path.stat().st_size > max_file_bytes:
+                skipped_large_files.append(posix)
+                continue
+        except OSError as exc:
+            logger.warning("Failed to stat %s: %s", posix, exc)
+            unparsed_files.append(posix)
             continue
         try:
             source_bytes = file_path.read_bytes()
@@ -197,6 +218,11 @@ def analyze_package_multi_lang(
 
     edges = tuple((importer, target) for importer, targets in resolved_edges.items() for target in targets)
 
+    if skipped_large_files:
+        logger.info(
+            "Skipped %d file(s) larger than %d bytes (not read/parsed)", len(skipped_large_files), max_file_bytes
+        )
+
     return AnalysisResult(
         total_loc=sum(file_loc.values()),
         units=tuple(units),
@@ -206,4 +232,5 @@ def analyze_package_multi_lang(
         edges=edges,
         unparsed_files=tuple(unparsed_files),
         unsupported_files=tuple(unsupported_files),
+        skipped_large_files=tuple(skipped_large_files),
     )

@@ -63,3 +63,4 @@ class AnalysisResult:
     edges: tuple[tuple[str, str], ...]  # (importer_file, imported_file) - resolved, local-only
     unparsed_files: tuple[str, ...]  # parsed with tree-sitter errors - results may be incomplete
     unsupported_files: tuple[str, ...]  # no registered analyzer for this extension
+    skipped_large_files: tuple[str, ...] = ()  # exceeded max_file_bytes - never read/parsed at all

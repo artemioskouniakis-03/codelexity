@@ -40,7 +40,13 @@ with col1:
         "Include languages (empty = all)", options=[lang.value for lang in Language], default=[]
     )
 with col2:
-    exclude_paths = st.text_input("Exclude paths (comma-separated)", value="node_modules,.venv,bin,dist,build")
+    exclude_paths = st.text_input(
+        "Exclude paths (comma-separated)", value="node_modules,.venv,bin,dist,build,coverage"
+    )
+    st.caption(
+        "VCS/cache/build dirs (.git, .next, __pycache__, .pytest_cache, .ruff_cache, .mypy_cache, .turbo) "
+        "are always excluded, in addition to whatever's listed above."
+    )
 
 
 @contextmanager
@@ -81,16 +87,18 @@ if st.button("Run Analysis", type="primary"):
                 on_parse_progress=on_parse_progress,
             )
             logger.info(
-                "Parsed %d files (%d units, %d LOC); %d unsupported, %d with parse errors",
+                "Parsed %d files (%d units, %d LOC); %d unsupported, %d with parse errors, %d skipped (too large)",
                 len(analysis.files),
                 len(analysis.units),
                 analysis.total_loc,
                 len(analysis.unsupported_files),
                 len(analysis.unparsed_files),
+                len(analysis.skipped_large_files),
             )
             status.write(
                 f"{len(analysis.files)} files, {len(analysis.units)} units, {analysis.total_loc} LOC "
-                f"({len(analysis.unsupported_files)} unsupported, {len(analysis.unparsed_files)} parse errors)."
+                f"({len(analysis.unsupported_files)} unsupported, {len(analysis.unparsed_files)} parse errors, "
+                f"{len(analysis.skipped_large_files)} skipped as too large)."
             )
 
         with timed_step(status, "Scoring metrics"):

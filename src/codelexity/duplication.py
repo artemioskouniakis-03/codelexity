@@ -1,10 +1,18 @@
-import hashlib
 from collections import defaultdict
 from dataclasses import dataclass
 
 from codelexity.languages.base import LanguageAnalyzer, walk_leaves
 
 DEFAULT_MIN_TOKENS = 50
+
+# A bucket this large is essentially always boilerplate (license headers, generated
+# scaffolding, a common import block) rather than meaningful duplication - verifying it
+# pairwise would be O(k^2) token comparisons for no useful signal. Skipped buckets are
+# rare in practice; this is a safety cap, not the common case.
+MAX_BUCKET_SIZE = 200
+
+_ROLLING_BASE = 1_000_003
+_ROLLING_MOD = (1 << 61) - 1  # Mersenne prime - standard modulus for polynomial rolling hashes
 
 _IDENTIFIER_TYPES = frozenset({"identifier", "type_identifier", "property_identifier", "shorthand_property_identifier"})
 _LITERAL_TYPES = frozenset(
@@ -61,9 +69,27 @@ def tokenize(tree, source: bytes, analyzer: LanguageAnalyzer) -> list[Token]:
     return tokens
 
 
-def _hash_window(tokens: list[Token], start: int, size: int) -> bytes:
-    joined = "|".join(t.normalized for t in tokens[start : start + size])
-    return hashlib.blake2b(joined.encode("utf-8"), digest_size=8).digest()
+def _rolling_hashes(ids: list[int], size: int) -> list[int]:
+    """Polynomial rolling hash of every `size`-length window over `ids`, computed in
+    O(len(ids)) total rather than O(len(ids) * size) - each window updates the previous
+    one's hash in O(1) (drop the outgoing token, add the incoming one) instead of
+    re-joining and re-hashing `size` tokens from scratch on every single shift, which
+    dominated runtime on large files (a 50-token re-hash for every one of tens of
+    thousands of positions in a big file adds up fast)."""
+    n = len(ids)
+    if n < size:
+        return []
+    high_power = pow(_ROLLING_BASE, size - 1, _ROLLING_MOD)
+    windows = [0] * (n - size + 1)
+    h = 0
+    for i in range(size):
+        h = (h * _ROLLING_BASE + ids[i]) % _ROLLING_MOD
+    windows[0] = h
+    for start in range(1, n - size + 1):
+        h = (h - ids[start - 1] * high_power) % _ROLLING_MOD
+        h = (h * _ROLLING_BASE + ids[start + size - 1]) % _ROLLING_MOD
+        windows[start] = h
+    return windows
 
 
 def find_duplicate_blocks(
@@ -73,14 +99,25 @@ def find_duplicate_blocks(
     """Token-shingling clone detection (PMD-CPD/jscpd style): hash a sliding window of
     normalized tokens per file, verify hash-bucket collisions token-for-token, and merge
     overlapping matches between the same file pair into one region."""
-    buckets: dict[bytes, list[tuple[str, int]]] = defaultdict(list)
+    token_id: dict[str, int] = {}
+    ids_by_file: dict[str, list[int]] = {}
     for file, tokens in file_tokens.items():
-        for start in range(0, max(len(tokens) - min_tokens + 1, 0)):
-            buckets[_hash_window(tokens, start, min_tokens)].append((file, start))
+        ids = []
+        for t in tokens:
+            i = token_id.get(t.normalized)
+            if i is None:
+                i = token_id[t.normalized] = len(token_id)
+            ids.append(i)
+        ids_by_file[file] = ids
+
+    buckets: dict[int, list[tuple[str, int]]] = defaultdict(list)
+    for file, ids in ids_by_file.items():
+        for start, h in enumerate(_rolling_hashes(ids, min_tokens)):
+            buckets[h].append((file, start))
 
     raw_matches: list[tuple[str, int, str, int]] = []
     for occurrences in buckets.values():
-        if len(occurrences) < 2:
+        if len(occurrences) < 2 or len(occurrences) > MAX_BUCKET_SIZE:
             continue
         for i in range(len(occurrences)):
             for j in range(i + 1, len(occurrences)):
@@ -88,39 +125,44 @@ def find_duplicate_blocks(
                 file_b, start_b = occurrences[j]
                 if file_a == file_b and start_a == start_b:
                     continue
-                window_a = file_tokens[file_a][start_a : start_a + min_tokens]
-                window_b = file_tokens[file_b][start_b : start_b + min_tokens]
-                if [t.normalized for t in window_a] == [t.normalized for t in window_b]:
+                ids_a = ids_by_file[file_a][start_a : start_a + min_tokens]
+                ids_b = ids_by_file[file_b][start_b : start_b + min_tokens]
+                if ids_a == ids_b:  # verifies the hash match - rolling hash collisions are possible
                     raw_matches.append((file_a, start_a, file_b, start_b))
 
     # Grow each match forward token-by-token while both streams keep agreeing, then dedupe
     # matches that are subsumed by a longer, already-grown match starting at/before them.
     grown: list[tuple[str, int, str, int, int]] = []
     for file_a, start_a, file_b, start_b in raw_matches:
-        tokens_a, tokens_b = file_tokens[file_a], file_tokens[file_b]
+        ids_a, ids_b = ids_by_file[file_a], ids_by_file[file_b]
         length = min_tokens
         while (
-            start_a + length < len(tokens_a)
-            and start_b + length < len(tokens_b)
-            and tokens_a[start_a + length].normalized == tokens_b[start_b + length].normalized
+            start_a + length < len(ids_a)
+            and start_b + length < len(ids_b)
+            and ids_a[start_a + length] == ids_b[start_b + length]
         ):
             length += 1
         grown.append((file_a, start_a, file_b, start_b, length))
 
-    grown.sort(key=lambda m: -m[4])
-    kept: list[tuple[str, int, str, int, int]] = []
+    # Subsumption only matters within the same (file_a, file_b) pair, so grouping first
+    # turns one global O(m^2) check into many much smaller ones - a large repo can have
+    # thousands of raw matches spread across hundreds of distinct file pairs.
+    by_pair: dict[tuple[str, str], list[tuple[str, int, str, int, int]]] = defaultdict(list)
     for match in grown:
-        file_a, start_a, file_b, start_b, length = match
-        subsumed = any(
-            k[0] == file_a
-            and k[2] == file_b
-            and k[1] <= start_a
-            and k[3] <= start_b
-            and k[1] + k[4] >= start_a + length
-            for k in kept
-        )
-        if not subsumed:
-            kept.append(match)
+        by_pair[(match[0], match[2])].append(match)
+
+    kept: list[tuple[str, int, str, int, int]] = []
+    for pair_matches in by_pair.values():
+        pair_matches.sort(key=lambda m: -m[4])
+        pair_kept: list[tuple[str, int, str, int, int]] = []
+        for match in pair_matches:
+            _, start_a, _, start_b, length = match
+            subsumed = any(
+                k[1] <= start_a and k[3] <= start_b and k[1] + k[4] >= start_a + length for k in pair_kept
+            )
+            if not subsumed:
+                pair_kept.append(match)
+        kept.extend(pair_kept)
 
     regions = []
     for file_a, start_a, file_b, start_b, length in kept:

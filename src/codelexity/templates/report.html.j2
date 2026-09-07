@@ -163,6 +163,7 @@
   (&le;50 organic, &le;300 semi-detached, 300+ embedded) rather than a user selection.</p>
   {% if analysis.unparsed_files %}<p>{{ analysis.unparsed_files|length }} file(s) had parse errors; their results may be incomplete.</p>{% endif %}
   {% if analysis.unsupported_files %}<p>{{ analysis.unsupported_files|length }} file(s) had no supported language analyzer and were excluded from all metrics.</p>{% endif %}
+  {% if analysis.skipped_large_files %}<p>{{ analysis.skipped_large_files|length }} file(s) exceeded the size cap and were skipped entirely (never read or parsed) - typically generated/bundled build output, e.g. minified JS.</p>{% endif %}
 </footer>
 
 </body>
