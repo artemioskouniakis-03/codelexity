@@ -69,6 +69,13 @@ def main():
     # analyze code
     data = analyze_package(path, exclude=args.exclude, include_only=args.include_only)
     data["path"] = shorten(path, Path.cwd()) if not args.absolute else path.as_posix()
+
+    if not args.absolute:
+        data["modules"] = {
+            shorten(Path(mod), path): {**d, "imports": [shorten(Path(i), path) for i in d["imports"]]}
+            for mod, d in data["modules"].items()
+        }
+
     G = create_graph(package_data=data)
     maintainability_index = maintainability(G)
     data["analytics"]["maintainability_index"] = maintainability_index
@@ -78,13 +85,6 @@ def main():
     )
     data["analytics"]["maintenance_FTEs"] = ftes
     data["analytics"]["maintenance_FTEs_range"] = (min_ftes, max_ftes)
-
-    if not args.absolute:
-        # Keys and imports shortened together - create_graph matches edges between the two.
-        data["modules"] = {
-            shorten(Path(mod), path): {**d, "imports": [shorten(Path(i), path) for i in d["imports"]]}
-            for mod, d in data["modules"].items()
-        }
 
     if args.plot:
         create_viz(data, G, HTML_NAME)
