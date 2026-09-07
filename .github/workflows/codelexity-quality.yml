@@ -1,0 +1,33 @@
+name: Codelexity Quality Check
+
+on:
+  pull_request:
+
+jobs:
+  codelexity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install codelexity (multi-language + CI extras)
+        run: pip install ".[multi-lang,ci]"
+
+      - name: Run Codelexity quality check
+        run: |
+          codelexity-ci . \
+            --min-stars 3.0 \
+            --report codelexity_report.html \
+            --json codelexity_summary.json
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codelexity-report
+          path: |
+            codelexity_report.html
+            codelexity_summary.json

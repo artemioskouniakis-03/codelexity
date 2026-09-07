@@ -46,6 +46,12 @@ ui = [
     "streamlit>=1.38",
     "jinja2>=3.1",
 ]
+# Headless CI usage (codelexity-ci) needs the Jinja2-templated HTML report but not
+# Streamlit - kept as its own extra so `pip install codelexity[multi-lang,ci]` in a
+# GitHub Actions runner doesn't pull in a browser UI dependency it will never use.
+ci = [
+    "jinja2>=3.1",
+]
 
 [project.urls]
 Homepage = "https://github.com/nickgiki/codelexity"
@@ -54,6 +60,7 @@ Changelog = "https://github.com/nickgiki/codelexity/blob/main/CHANGELOG.md"
 
 [project.scripts]
 codelexity = "codelexity.main:main"
+codelexity-ci = "codelexity.ci:main"
 
 [tool.uv.sources]
 codelexity = { path = "src", editable = true }

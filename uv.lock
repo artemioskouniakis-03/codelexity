@@ -253,6 +253,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+ci = [
+    { name = "jinja2" },
+]
 multi-lang = [
     { name = "tree-sitter" },
     { name = "tree-sitter-c-sharp" },
@@ -275,6 +278,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jinja2", marker = "extra == 'ci'", specifier = ">=3.1" },
     { name = "jinja2", marker = "extra == 'ui'", specifier = ">=3.1" },
     { name = "networkx", specifier = ">=3.0" },
     { name = "pyvis", specifier = ">=0.3.2" },
@@ -286,7 +290,7 @@ requires-dist = [
     { name = "tree-sitter-python", marker = "extra == 'multi-lang'", specifier = ">=0.23,<0.26" },
     { name = "tree-sitter-typescript", marker = "extra == 'multi-lang'", specifier = ">=0.23,<0.26" },
 ]
-provides-extras = ["multi-lang", "ui"]
+provides-extras = ["multi-lang", "ui", "ci"]
 
 [package.metadata.requires-dev]
 dev = [
