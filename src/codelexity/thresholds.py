@@ -45,11 +45,16 @@ COMPONENT_RISK_BANDS = (  # risk = 1 - independence_score
     (float("inf"), RiskBand.VERY_HIGH),
 )
 
-VOLUME_KLOC_BANDS = (
-    (50, "Small"),
-    (300, "Medium"),
-    (1000, "Large"),
-    (float("inf"), "Very Large"),
+# Confirmed by the user: Volume gets an actual star rating (not just a size label),
+# derived directly from KLOC - bigger codebases score lower, informed by COCOMO's premise
+# that effort scales super-linearly with size (see cocomo.project_type_for_kloc, which
+# derives the COCOMO project type from the same KLOC value, replacing a manual selector).
+VOLUME_STAR_BANDS = (
+    (10, 5, "Very Small"),
+    (50, 4, "Small"),
+    (300, 3, "Medium"),
+    (1000, 2, "Large"),
+    (float("inf"), 1, "Very Large"),
 )
 
 
@@ -60,8 +65,9 @@ def band_for(value: float, bands: tuple) -> RiskBand:
     return bands[-1][1]
 
 
-def volume_label(kloc: float) -> str:
-    for upper, label in VOLUME_KLOC_BANDS:
+def volume_stars(kloc: float) -> tuple[int, str]:
+    """(stars, size label) for a KLOC value, per VOLUME_STAR_BANDS."""
+    for upper, stars, label in VOLUME_STAR_BANDS:
         if kloc <= upper:
-            return label
-    return VOLUME_KLOC_BANDS[-1][1]
+            return stars, label
+    return VOLUME_STAR_BANDS[-1][1], VOLUME_STAR_BANDS[-1][2]

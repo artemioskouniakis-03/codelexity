@@ -20,6 +20,18 @@ SCHEDULE_COEFFICIENTS = {
 }
 
 
+def project_type_for_kloc(kloc: float) -> ProjectType:
+    """Derives the Basic COCOMO project type from codebase size instead of asking the
+    user to pick one - standard COCOMO guidance associates organic with small,
+    well-understood projects (roughly up to ~50 KLOC), semi-detached with medium ones
+    (up to ~300 KLOC), and embedded with large/complex ones beyond that."""
+    if kloc <= 50:
+        return ProjectType.ORGANIC
+    if kloc <= 300:
+        return ProjectType.SEMI_DETACHED
+    return ProjectType.EMBEDDED
+
+
 def effort_person_months(kloc: float, project_type: ProjectType) -> float:
     a, b = EFFORT_COEFFICIENTS[project_type]
     return a * (kloc**b)
@@ -30,7 +42,10 @@ def schedule_months(effort_pm: float, project_type: ProjectType) -> float:
     return c * (effort_pm**d)
 
 
-def estimate(kloc: float, project_type: ProjectType) -> dict:
+def estimate(kloc: float) -> dict:
+    """No project_type parameter - it's derived from `kloc` itself
+    (project_type_for_kloc), not user-selected."""
+    project_type = project_type_for_kloc(kloc)
     effort_pm = effort_person_months(kloc, project_type)
     schedule = schedule_months(effort_pm, project_type)
     headcount = round(effort_pm / schedule) if schedule else 0

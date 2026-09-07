@@ -1,6 +1,6 @@
 import unittest
 
-from codelexity.cocomo import ProjectType, effort_person_months, estimate, schedule_months
+from codelexity.cocomo import ProjectType, effort_person_months, estimate, project_type_for_kloc, schedule_months
 
 
 class TestCocomo(unittest.TestCase):
@@ -20,10 +20,19 @@ class TestCocomo(unittest.TestCase):
         self.assertLess(schedule, effort)
 
     def test_estimate_returns_expected_keys(self):
-        result = estimate(50, ProjectType.SEMI_DETACHED)
+        result = estimate(50)
         for key in ("project_type", "kloc", "effort_pm", "schedule_months", "headcount"):
             self.assertIn(key, result)
         self.assertGreater(result["headcount"], 0)
+
+    def test_project_type_derived_from_kloc_not_user_selected(self):
+        self.assertEqual(project_type_for_kloc(10), ProjectType.ORGANIC)
+        self.assertEqual(project_type_for_kloc(50), ProjectType.ORGANIC)
+        self.assertEqual(project_type_for_kloc(51), ProjectType.SEMI_DETACHED)
+        self.assertEqual(project_type_for_kloc(300), ProjectType.SEMI_DETACHED)
+        self.assertEqual(project_type_for_kloc(301), ProjectType.EMBEDDED)
+        self.assertEqual(estimate(10)["project_type"], "organic")
+        self.assertEqual(estimate(1000)["project_type"], "embedded")
 
 
 if __name__ == "__main__":
