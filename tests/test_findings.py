@@ -1,7 +1,7 @@
 import unittest
 
-from codelexity.findings import all_findings, unit_complexity_findings, unit_size_findings
-from codelexity.models import AnalysisResult, ComponentMetric, FileMetric, Language, UnitMetric
+from codelexity.findings import all_findings, duplication_findings, unit_complexity_findings, unit_size_findings
+from codelexity.models import AnalysisResult, ComponentMetric, DuplicateBlock, FileMetric, Language, UnitMetric
 
 
 def _analysis() -> AnalysisResult:
@@ -37,12 +37,15 @@ def _analysis() -> AnalysisResult:
             name=".", depth=0, loc=70, file_count=1, efferent=0, afferent=0, independence_score=1.0, files=("a.py",)
         ),
     )
+    duplicate_blocks = (
+        DuplicateBlock(file_a="a.py", lines_a=(1, 5), file_b="b.py", lines_b=(10, 14), token_length=60),
+    )
     return AnalysisResult(
         total_loc=70,
         units=units,
         files=files,
         components=components,
-        duplicate_blocks=(),
+        duplicate_blocks=duplicate_blocks,
         edges=(),
         unparsed_files=(),
         unsupported_files=(),
@@ -70,6 +73,18 @@ class TestFindings(unittest.TestCase):
         )
         self.assertEqual(len(findings["Unit Size"]), 2)
         self.assertEqual(len(findings["Module Coupling"]), 1)
+        # System/Unit/Architecture Level order, confirmed by the user.
+        self.assertEqual(
+            list(findings),
+            ["Volume", "Duplication", "Unit Size", "Unit Complexity", "Module Coupling", "Component Independence"],
+        )
+
+    def test_duplication_findings_share_a_clone_id_per_pair(self):
+        rows = duplication_findings(_analysis())
+        self.assertEqual(len(rows), 2)  # one row per side of the one clone block
+        self.assertEqual(rows[0]["clone_id"], rows[1]["clone_id"])
+        self.assertEqual({r["file"] for r in rows}, {"a.py", "b.py"})
+        self.assertEqual(rows[0]["token_length"], 60)
 
 
 if __name__ == "__main__":

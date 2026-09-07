@@ -1,7 +1,6 @@
 from codelexity.models import AnalysisResult
 from codelexity.thresholds import (
     COMPONENT_RISK_BANDS,
-    DUPLICATION_PCT_BANDS,
     MODULE_COUPLING_BANDS,
     UNIT_COMPLEXITY_BANDS,
     UNIT_SIZE_BANDS,
@@ -41,16 +40,29 @@ def module_coupling_findings(analysis: AnalysisResult) -> list[dict]:
 
 
 def duplication_findings(analysis: AnalysisResult) -> list[dict]:
+    """Two rows per detected clone (one per side), sharing a `clone_id` - sort/filter by
+    that id to see the two locations that make up one duplicate pair. A block found
+    between three or more files still only ever produces pairs (file_a, file_b), so the
+    same clone_id can appear on more than two rows if a passage is duplicated in several
+    places at once - they all belong to the same reported clone."""
     rows = []
-    for f in analysis.files:
-        pct = 100.0 * f.duplicate_loc / f.loc if f.loc else 0.0
+    for clone_id, b in enumerate(analysis.duplicate_blocks, start=1):
         rows.append(
             {
-                "file": f.file,
-                "duplicate_loc": f.duplicate_loc,
-                "loc": f.loc,
-                "duplicate_pct": round(pct, 1),
-                "band": band_for(pct, DUPLICATION_PCT_BANDS).value,
+                "clone_id": clone_id,
+                "file": b.file_a,
+                "start_line": b.lines_a[0],
+                "end_line": b.lines_a[1],
+                "token_length": b.token_length,
+            }
+        )
+        rows.append(
+            {
+                "clone_id": clone_id,
+                "file": b.file_b,
+                "start_line": b.lines_b[0],
+                "end_line": b.lines_b[1],
+                "token_length": b.token_length,
             }
         )
     return rows
@@ -76,13 +88,17 @@ def volume_findings(analysis: AnalysisResult) -> list[dict]:
 
 
 def all_findings(analysis: AnalysisResult) -> dict[str, list[dict]]:
-    """One entry per report metric section, in the same order they're displayed -
-    consumed both for the per-section CSV download and the combined multi-sheet export."""
+    """One entry per report metric section, in the same System/Unit/Architecture Level
+    order they're displayed - consumed both for the per-section CSV download and the
+    combined multi-sheet export."""
     return {
-        "Unit Complexity": unit_complexity_findings(analysis),
+        # System Level
+        "Volume": volume_findings(analysis),
         "Duplication": duplication_findings(analysis),
+        # Unit Level
+        "Unit Size": unit_size_findings(analysis),
+        "Unit Complexity": unit_complexity_findings(analysis),
+        # Architecture Level
         "Module Coupling": module_coupling_findings(analysis),
         "Component Independence": component_independence_findings(analysis),
-        "Unit Size": unit_size_findings(analysis),
-        "Volume": volume_findings(analysis),
     }

@@ -8,7 +8,7 @@ from pathlib import Path
 import streamlit as st
 
 from codelexity.cocomo import estimate
-from codelexity.dependency_graph import build_component_graph, build_file_graph, render_graph_html
+from codelexity.dependency_graph import build_component_graph, build_file_graph, render_graph_fragment
 from codelexity.models import Language
 from codelexity.multi_lang import analyze_package_multi_lang
 from codelexity.report import build_report
@@ -40,9 +40,7 @@ with col1:
         "Include languages (empty = all)", options=[lang.value for lang in Language], default=[]
     )
 with col2:
-    exclude_paths = st.text_input(
-        "Exclude paths (comma-separated)", value="node_modules,.venv,bin,dist,build,coverage"
-    )
+    exclude_paths = st.text_input("Exclude paths (comma-separated)", value="node_modules,.venv,bin,dist,build,coverage")
     st.caption(
         "VCS/cache/build dirs (.git, .next, __pycache__, .pytest_cache, .ruff_cache, .mypy_cache, .turbo) "
         "are always excluded, in addition to whatever's listed above."
@@ -139,10 +137,10 @@ if "analysis" in st.session_state:
         with st.spinner(f"Building {graph_view.lower()} dependency graph and report..."):
             t0 = time.monotonic()
             graph = build_file_graph(analysis) if graph_view == "Files" else build_component_graph(analysis)
-            graph_html = render_graph_html(graph)
+            graph_fragment = render_graph_fragment(graph)
 
             generated_at = datetime.now(UTC).isoformat()
-            html = build_report(analysis, scores, cocomo_result, graph_html, generated_at, root_str)
+            html = build_report(analysis, scores, cocomo_result, graph_fragment, generated_at, root_str)
             Path(REPORT_HTML_NAME).write_text(html, encoding="utf-8")
             logger.info("Built %s-level graph and report in %.2fs", graph_view.lower(), time.monotonic() - t0)
 

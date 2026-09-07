@@ -10,19 +10,27 @@ from codelexity.thresholds import (
     UNIT_COMPLEXITY_BANDS,
     UNIT_SIZE_BANDS,
     band_for,
+    volume_raw_score,
+    volume_stars,
 )
 
 logger = logging.getLogger(__name__)
 
 BREAKPOINTS = [(0, 5.5), (5, 5.0), (25, 4.0), (50, 3.0), (75, 2.0), (95, 1.0), (100, 0.5)]
 
+# Three levels, two metrics each, equal weight per level and equal weight within a level:
+#   System Level:       Volume, Duplication
+#   Unit Level:          Unit Size, Unit Complexity
+#   Architecture Level:   Module Coupling, Component Independence
+# 1/3 per level / 2 metrics per level = 1/6 each. Confirmed by the user: Volume now
+# participates in the overall score (previously excluded as size-only context).
 WEIGHTS = {
-    "unit_complexity": 0.25,
-    "duplication": 0.20,
-    "module_coupling": 0.20,
-    "component_independence": 0.20,
-    "unit_size": 0.15,
-    # "volume" is intentionally excluded - it's a size descriptor, not a risk signal.
+    "volume": 1 / 6,
+    "duplication": 1 / 6,
+    "unit_size": 1 / 6,
+    "unit_complexity": 1 / 6,
+    "module_coupling": 1 / 6,
+    "component_independence": 1 / 6,
 }
 
 
@@ -127,12 +135,17 @@ class ScoreReport:
     module_coupling: MetricScore
     duplication: MetricScore
     component_independence: MetricScore
+    volume_raw: float  # star count (1-5) as a float - see thresholds.volume_raw_score
+    volume_stars: int
     overall_raw: float
     overall_stars: int
     total_loc: int
 
 
 def score_analysis(analysis: AnalysisResult) -> ScoreReport:
+    kloc = analysis.total_loc / 1000
+    v_raw = volume_raw_score(kloc)
+    v_stars, _ = volume_stars(kloc)
     scores = {
         "unit_size": score_unit_size(list(analysis.units)),
         "unit_complexity": score_unit_complexity(list(analysis.units)),
@@ -140,13 +153,16 @@ def score_analysis(analysis: AnalysisResult) -> ScoreReport:
         "duplication": score_duplication(list(analysis.files)),
         "component_independence": score_component_independence(list(analysis.components)),
     }
-    overall_raw = sum(WEIGHTS[m] * scores[m].raw_score for m in WEIGHTS)
+    raw_by_metric = {name: s.raw_score for name, s in scores.items()} | {"volume": v_raw}
+    overall_raw = sum(WEIGHTS[m] * raw_by_metric[m] for m in WEIGHTS)
     return ScoreReport(
         unit_size=scores["unit_size"],
         unit_complexity=scores["unit_complexity"],
         module_coupling=scores["module_coupling"],
         duplication=scores["duplication"],
         component_independence=scores["component_independence"],
+        volume_raw=v_raw,
+        volume_stars=v_stars,
         overall_raw=overall_raw,
         overall_stars=stars(overall_raw),
         total_loc=analysis.total_loc,

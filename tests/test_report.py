@@ -1,5 +1,6 @@
 import unittest
 
+from codelexity.dependency_graph import GraphFragment
 from codelexity.models import AnalysisResult, ComponentMetric, FileMetric, Language, UnitMetric
 from codelexity.report import build_report
 from codelexity.scoring import score_analysis
@@ -43,17 +44,20 @@ class TestBuildReport(unittest.TestCase):
         analysis = _analysis()
         scores = score_analysis(analysis)
         cocomo = {"project_type": "organic", "kloc": 0.005, "effort_pm": 0.1, "schedule_months": 0.5, "headcount": 1}
+        graph_fragment = GraphFragment(head='<script src="vis-network.js"></script>', body='<div id="mynetwork"></div>')
 
-        html = build_report(
-            analysis, scores, cocomo, "<html><body>graph</body></html>", "2026-01-01T00:00:00Z", "/repo"
-        )
+        html = build_report(analysis, scores, cocomo, graph_fragment, "2026-01-01T00:00:00Z", "/repo")
 
         self.assertIn("downloadFindingsCSV", html)
         self.assertIn("downloadAllFindingsXlsx", html)
         self.assertIn("xlsx.full.min.js", html)
-        self.assertIn("srcdoc=", html)
+        self.assertIn("mynetwork", html)  # graph body embedded directly, not via iframe
+        self.assertNotIn("<iframe", html)
         self.assertIn('"Unit Complexity"', html)  # findings JSON embedded
-        self.assertNotIn("</script>graph", html)  # embedded graph HTML doesn't break out of srcdoc
+        self.assertIn("System Level Metrics", html)
+        self.assertIn("Unit Level Metrics", html)
+        self.assertIn("Architecture Level Metrics", html)
+        self.assertIn("clone_id", html)  # duplication findings methodology note
 
 
 if __name__ == "__main__":

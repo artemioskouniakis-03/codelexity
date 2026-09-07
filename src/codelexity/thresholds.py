@@ -71,3 +71,13 @@ def volume_stars(kloc: float) -> tuple[int, str]:
         if kloc <= upper:
             return stars, label
     return VOLUME_STAR_BANDS[-1][1], VOLUME_STAR_BANDS[-1][2]
+
+
+def volume_raw_score(kloc: float) -> float:
+    """Volume's raw score (0.5-5.5) for the weighted overall score. VOLUME_STAR_BANDS is
+    a direct star assignment (not a continuous formula like the other metrics), so this
+    uses the star count itself as the raw score - consistent with every other metric's
+    own star buckets, whose boundaries (raw_score.stars()) already center on whole
+    numbers: stars(4.0) == 4, stars(3.0) == 3, etc."""
+    stars, _ = volume_stars(kloc)
+    return float(stars)

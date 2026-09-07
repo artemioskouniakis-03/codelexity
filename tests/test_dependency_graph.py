@@ -1,6 +1,11 @@
 import unittest
 
-from codelexity.dependency_graph import build_component_graph, build_file_graph, render_graph_html
+from codelexity.dependency_graph import (
+    build_component_graph,
+    build_file_graph,
+    render_graph_fragment,
+    render_graph_html,
+)
 from codelexity.models import AnalysisResult, ComponentMetric, FileMetric, Language
 
 
@@ -50,6 +55,19 @@ class TestDependencyGraph(unittest.TestCase):
         html = render_graph_html(build_file_graph(_analysis()))
         self.assertIn("<html", html.lower())
         self.assertIn("</html>", html.lower())
+
+    def test_render_graph_fragment_extracts_head_and_body(self):
+        fragment = render_graph_fragment(build_file_graph(_analysis()))
+        self.assertIn("vis-network", fragment.head)
+        self.assertIn("mynetwork", fragment.body)
+        # The fragment must not itself contain <html>/<head>/<body> tags - it's meant to
+        # be spliced into another page's own document, not stand alone.
+        self.assertNotIn("<head>", fragment.head)
+        self.assertNotIn("<body>", fragment.body)
+
+    def test_render_graph_fragment_preserves_the_real_script_closing_tag(self):
+        fragment = render_graph_fragment(build_file_graph(_analysis()))
+        self.assertTrue(fragment.body.rstrip().endswith("</script>") or "</script>" in fragment.body)
 
 
 if __name__ == "__main__":

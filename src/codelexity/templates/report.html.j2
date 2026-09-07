@@ -6,7 +6,8 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   body { font-family: ui-monospace, Consolas, monospace; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-  h1, h2 { margin-bottom: 0.3rem; }
+  h1, h2, h3 { margin-bottom: 0.3rem; }
+  h3.level-header { margin-top: 1.2rem; color: #444; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
   .stars { color: #d9a441; font-size: 1.6rem; letter-spacing: 2px; }
   .card { border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; margin: 10px 0; }
   .band-bar { display: flex; height: 10px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
@@ -16,7 +17,6 @@
   .band-very_high { background: #d05151; }
   table { border-collapse: collapse; width: 100%; margin-top: 8px; }
   td, th { border: 1px solid #ddd; padding: 4px 8px; text-align: left; font-size: 0.85rem; }
-  iframe { width: 100%; height: 600px; border: 1px solid #ddd; }
   .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 2px 8px; font-size: 0.85rem; }
   footer { font-size: 0.8rem; color: #666; margin-top: 2rem; }
   .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; gap: 12px; }
@@ -25,7 +25,9 @@
   .metric-row .stars { font-size: 1rem; }
   .dl-btn { cursor: pointer; border: 1px solid #ccc; background: #f7f7f7; border-radius: 4px; padding: 4px 10px; font: inherit; font-size: 0.8rem; }
   .dl-btn:hover { background: #eee; }
+  #mynetwork { border: 1px solid #ddd; }
 </style>
+{{ graph_head|safe }}
 </head>
 <body>
 
@@ -75,28 +77,33 @@
   <h2>Overall Score</h2>
   <div class="stars">{{ "★" * scores.overall_stars }}{{ "☆" * (5 - scores.overall_stars) }}</div>
   <p>Raw score: {{ "%.2f"|format(scores.overall_raw) }} / 5.5
-     &mdash; weighted average of the metrics below (Volume excluded, shown as context only).</p>
+     &mdash; weighted average of all six metrics below, grouped by level.</p>
   <button class="dl-btn" onclick="downloadAllFindingsXlsx()">Download all findings (Excel, one tab per metric)</button>
 
-  {% for label, score, description in metric_cards %}
+  {% for level_name, metrics in metric_levels %}
+  <h3 class="level-header">{{ level_name }}</h3>
+  {% for label, score, description in metrics %}
   <div class="metric-row">
-    <div class="name"><strong>{{ label }}</strong><br><span style="font-size:0.8rem;color:#666;">{{ description }}</span></div>
+    <div class="name"><strong>{{ label }}</strong>{% if label == "Volume" %} <span class="badge">{{ volume_label }}</span>{% endif %}<br>
+      <span style="font-size:0.8rem;color:#666;">{{ description }}</span></div>
+    {% if score is none %}
+    <div class="stars">{{ "★" * scores.volume_stars }}{{ "☆" * (5 - scores.volume_stars) }} <span style="font-size:0.7rem;color:#666;">({{ "%.2f"|format(scores.volume_raw) }})</span><br>
+      <span style="font-size:0.7rem;color:#666;">{{ analysis.total_loc }} LOC ({{ kloc }} KLOC)</span></div>
+    {% else %}
     <div class="stars">{{ "★" * score.stars }}{{ "☆" * (5 - score.stars) }} <span style="font-size:0.7rem;color:#666;">({{ "%.2f"|format(score.raw_score) }})</span></div>
+    {% endif %}
     <button class="dl-btn" onclick="downloadFindingsCSV('{{ label }}')">Download findings</button>
   </div>
   {% endfor %}
-  <div class="metric-row">
-    <div class="name"><strong>Volume</strong> <span class="badge">{{ volume_label }}</span><br>
-      <span style="font-size:0.8rem;color:#666;">Size, not risk - shown for context, not weighted into the overall score</span></div>
-    <div class="stars">{{ "★" * volume_stars }}{{ "☆" * (5 - volume_stars) }}<br>
-      <span style="font-size:0.7rem;color:#666;">{{ analysis.total_loc }} LOC ({{ kloc }} KLOC)</span></div>
-    <button class="dl-btn" onclick="downloadFindingsCSV('Volume')">Download findings</button>
-  </div>
+  {% endfor %}
 </section>
 
 <section>
   <h2>Per-metric Breakdown</h2>
-  {% for label, score, description in metric_cards %}
+  {% for level_name, metrics in metric_levels %}
+  <h3 class="level-header">{{ level_name }}</h3>
+  {% for label, score, description in metrics %}
+  {% if score is not none %}
   <div class="card">
     <h3>{{ label }} <span class="stars" style="font-size:1rem;">{{ "★" * score.stars }}{{ "☆" * (5 - score.stars) }}</span></h3>
     <p>{{ "%.1f"|format(score.severity_pct) }}% of code in Very-High/High risk-weighted severity (raw score {{ "%.2f"|format(score.raw_score) }})</p>
@@ -106,6 +113,13 @@
       {% endfor %}
     </div>
   </div>
+  {% else %}
+  <div class="card">
+    <h3>{{ label }} <span class="badge">{{ volume_label }}</span> <span class="stars" style="font-size:1rem;">{{ "★" * scores.volume_stars }}{{ "☆" * (5 - scores.volume_stars) }}</span></h3>
+    <p>{{ analysis.total_loc }} LOC ({{ kloc }} KLOC) - {{ description }}</p>
+  </div>
+  {% endif %}
+  {% endfor %}
   {% endfor %}
 </section>
 
@@ -123,7 +137,7 @@
 
 <section>
   <h2>Dependency Graph</h2>
-  <iframe srcdoc="{{ graph_html }}"></iframe>
+  {{ graph_body|safe }}
 </section>
 
 <section>
@@ -149,18 +163,22 @@
 </section>
 
 <footer>
-  <p><strong>Methodology.</strong> Unit Size (LOC): 1-15 Low, 16-30 Medium, 31-60 High, 61+ Very High.
+  <p><strong>Methodology.</strong> Metrics are grouped into three levels, each contributing equally
+  to the overall score (1/3 per level, split evenly between its two metrics - 1/6 each):
+  <strong>System Level</strong> (Volume, Duplication), <strong>Unit Level</strong> (Unit Size, Unit
+  Complexity), <strong>Architecture Level</strong> (Module Coupling, Component Independence).</p>
+  <p>Unit Size (LOC): 1-15 Low, 16-30 Medium, 31-60 High, 61+ Very High.
   Unit Complexity (McCabe): 1-5 Low, 6-10 Medium, 11-25 High, 26+ Very High.
   Module Coupling (incoming refs): 0-10 Low, 11-20 Medium, 21-50 High, 51+ Very High.
   Duplication and Component Independence bands are proposed heuristics (modeled on SonarQube's
   duplication convention and an 80%-cohesion rule of thumb, respectively), not user-specified.
   Each metric's raw score (0.5-5.5) is a piecewise-linear mapping of the LOC-weighted % of code
-  in each risk band. Overall score is a weighted average (Unit Complexity 0.25, Duplication/
-  Module Coupling/Component Independence 0.20 each, Unit Size 0.15); Volume is excluded from the
-  overall score and reported separately as context. Volume's star rating (KLOC): &le;10 Very
-  Small (5&#9733;), &le;50 Small (4&#9733;), &le;300 Medium (3&#9733;), &le;1000 Large (2&#9733;),
-  1000+ Very Large (1&#9733;) - and the COCOMO project type above uses the same KLOC value
-  (&le;50 organic, &le;300 semi-detached, 300+ embedded) rather than a user selection.</p>
+  in each risk band. Volume's star rating (KLOC): &le;10 Very Small (5&#9733;), &le;50 Small
+  (4&#9733;), &le;300 Medium (3&#9733;), &le;1000 Large (2&#9733;), 1000+ Very Large (1&#9733;)
+  - and the COCOMO project type above uses the same KLOC value (&le;50 organic, &le;300
+  semi-detached, 300+ embedded) rather than a user selection.</p>
+  <p>Duplication findings share a <code>clone_id</code> across the two rows that make up one
+  detected clone pair - filter or sort by it to see both locations of the same duplicate.</p>
   {% if analysis.unparsed_files %}<p>{{ analysis.unparsed_files|length }} file(s) had parse errors; their results may be incomplete.</p>{% endif %}
   {% if analysis.unsupported_files %}<p>{{ analysis.unsupported_files|length }} file(s) had no supported language analyzer and were excluded from all metrics.</p>{% endif %}
   {% if analysis.skipped_large_files %}<p>{{ analysis.skipped_large_files|length }} file(s) exceeded the size cap and were skipped entirely (never read or parsed) - typically generated/bundled build output, e.g. minified JS.</p>{% endif %}

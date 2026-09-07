@@ -32,18 +32,18 @@ def build_report(
     analysis: AnalysisResult,
     scores: ScoreReport,
     cocomo: dict,
-    graph_html: str,
+    graph_fragment,
     generated_at: str,
     repo_path: str,
 ) -> str:
     """Pure string-in/string-out - no file I/O, no datetime.now() inside. The caller
-    writes the returned string to disk. `graph_html` is the full standalone dependency
-    graph page (see dependency_graph.render_graph_html) - embedded via an iframe's
-    srcdoc rather than referenced by path, so it works both as a downloaded file and
-    inline in Streamlit (whose st.components.v1.html has no base URL a relative path
-    could resolve against)."""
+    writes the returned string to disk. `graph_fragment` is a
+    dependency_graph.GraphFragment (head extras + body content) embedded directly into
+    this page's own document, rather than through a nested iframe - see
+    dependency_graph.render_graph_fragment's docstring for why a nested iframe rendered
+    blank."""
     kloc = analysis.total_loc / 1000
-    volume_star_count, volume_size_label = volume_stars(kloc)
+    _, volume_size_label = volume_stars(kloc)
     template = _env().get_template("report.html.j2")
     return template.render(
         repo_path=repo_path,
@@ -51,20 +51,40 @@ def build_report(
         analysis=analysis,
         scores=scores,
         cocomo=cocomo,
-        graph_html=graph_html,
+        graph_head=graph_fragment.head,
+        graph_body=graph_fragment.body,
         kloc=round(kloc, 2),
-        volume_stars=volume_star_count,
         volume_label=volume_size_label,
         findings=all_findings(analysis),
-        metric_cards=[
-            ("Unit Complexity", scores.unit_complexity, "McCabe cyclomatic complexity per function/method"),
-            ("Duplication", scores.duplication, "% of code found in duplicated blocks"),
-            ("Module Coupling", scores.module_coupling, "Incoming references (fan-in) per file"),
+        # System / Unit / Architecture Level grouping, in that order - confirmed by the
+        # user. Volume has no MetricScore (it's a single repo-wide KLOC value, not
+        # aggregated over units/files/components like the others) so it's listed with
+        # score=None; the template renders it with scores.volume_raw/volume_stars instead.
+        metric_levels=[
             (
-                "Component Independence",
-                scores.component_independence,
-                "Cross-component coupling (Martin's Instability)",
+                "System Level Metrics",
+                [
+                    ("Volume", None, "Codebase size (KLOC) - COCOMO-informed, larger codebases score lower"),
+                    ("Duplication", scores.duplication, "% of code found in duplicated blocks"),
+                ],
             ),
-            ("Unit Size", scores.unit_size, "Lines of code per function/method"),
+            (
+                "Unit Level Metrics",
+                [
+                    ("Unit Size", scores.unit_size, "Lines of code per function/method"),
+                    ("Unit Complexity", scores.unit_complexity, "McCabe cyclomatic complexity per function/method"),
+                ],
+            ),
+            (
+                "Architecture Level Metrics",
+                [
+                    ("Module Coupling", scores.module_coupling, "Incoming references (fan-in) per file"),
+                    (
+                        "Component Independence",
+                        scores.component_independence,
+                        "Cross-component coupling (Martin's Instability)",
+                    ),
+                ],
+            ),
         ],
     )

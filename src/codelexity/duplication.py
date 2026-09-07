@@ -157,9 +157,7 @@ def find_duplicate_blocks(
         pair_kept: list[tuple[str, int, str, int, int]] = []
         for match in pair_matches:
             _, start_a, _, start_b, length = match
-            subsumed = any(
-                k[1] <= start_a and k[3] <= start_b and k[1] + k[4] >= start_a + length for k in pair_kept
-            )
+            subsumed = any(k[1] <= start_a and k[3] <= start_b and k[1] + k[4] >= start_a + length for k in pair_kept)
             if not subsumed:
                 pair_kept.append(match)
         kept.extend(pair_kept)

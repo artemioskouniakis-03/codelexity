@@ -134,6 +134,17 @@ class TreeSitterAnalyzer:
             key = parent.child_by_field_name("key")
             if key is not None:
                 return source[key.start_byte : key.end_byte].decode("utf-8", errors="replace")
+        # By far the most common case left unnamed otherwise: a function/arrow passed
+        # directly as a call argument - useEffect(() => {...}), array.map(x => ...),
+        # promise.then(...) - extremely common in JS/TS/React code, where most inline
+        # callbacks are written this way rather than assigned to a variable first.
+        if parent is not None and parent.type == "arguments":
+            call = parent.parent
+            if call is not None and call.type == "call_expression":
+                callee = call.child_by_field_name("function")
+                if callee is not None:
+                    callee_text = source[callee.start_byte : callee.end_byte].decode("utf-8", errors="replace")
+                    return f"<arg of {callee_text}>"
         return f"<anonymous>:{_byte_to_line(source, node.start_byte)}"
 
     def find_units(self, tree, source: bytes) -> list[UnitNode]:

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from codelexity.cocomo import estimate
-from codelexity.dependency_graph import build_file_graph, render_graph_html
+from codelexity.dependency_graph import build_file_graph, render_graph_fragment
 from codelexity.multi_lang import analyze_package_multi_lang
 from codelexity.report import build_report
 from codelexity.scoring import ScoreReport, score_analysis
@@ -39,14 +39,17 @@ def _summary(analysis, scores: ScoreReport, cocomo_result: dict) -> dict:
         "overall_stars": scores.overall_stars,
         "overall_raw": round(scores.overall_raw, 2),
         "metrics": {
-            name: {"stars": s.stars, "raw_score": round(s.raw_score, 2), "severity_pct": round(s.severity_pct, 1)}
-            for name, s in (
-                ("unit_complexity", scores.unit_complexity),
-                ("duplication", scores.duplication),
-                ("module_coupling", scores.module_coupling),
-                ("component_independence", scores.component_independence),
-                ("unit_size", scores.unit_size),
-            )
+            "volume": {"stars": scores.volume_stars, "raw_score": round(scores.volume_raw, 2)},
+            **{
+                name: {"stars": s.stars, "raw_score": round(s.raw_score, 2), "severity_pct": round(s.severity_pct, 1)}
+                for name, s in (
+                    ("duplication", scores.duplication),
+                    ("unit_size", scores.unit_size),
+                    ("unit_complexity", scores.unit_complexity),
+                    ("module_coupling", scores.module_coupling),
+                    ("component_independence", scores.component_independence),
+                )
+            },
         },
         "cocomo": cocomo_result,
         "total_loc": analysis.total_loc,
@@ -75,16 +78,19 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Codelexity overall score: {scores.overall_stars} stars ({scores.overall_raw:.2f}/5.5)")
     for name, m in summary["metrics"].items():
-        print(f"  {name}: {m['stars']} stars ({m['raw_score']:.2f}, {m['severity_pct']:.1f}% severity)")
-    print(f"  volume: {cocomo_result['kloc']} KLOC, project type {cocomo_result['project_type']} (COCOMO-derived)")
+        if "severity_pct" in m:
+            print(f"  {name}: {m['stars']} stars ({m['raw_score']:.2f}, {m['severity_pct']:.1f}% severity)")
+        else:
+            print(f"  {name}: {m['stars']} stars ({m['raw_score']:.2f}, {cocomo_result['kloc']} KLOC)")
+    print(f"  COCOMO project type: {cocomo_result['project_type']} (derived from codebase size)")
 
     if args.json_path:
         Path(args.json_path).write_text(json.dumps(summary, indent=2), encoding="utf-8")
         logger.info("Wrote JSON summary to %s", args.json_path)
 
     if args.report:
-        graph_html = render_graph_html(build_file_graph(analysis))
-        html = build_report(analysis, scores, cocomo_result, graph_html, datetime.now(UTC).isoformat(), str(root))
+        graph_fragment = render_graph_fragment(build_file_graph(analysis))
+        html = build_report(analysis, scores, cocomo_result, graph_fragment, datetime.now(UTC).isoformat(), str(root))
         Path(args.report).write_text(html, encoding="utf-8")
         logger.info("Wrote HTML report to %s", args.report)
 
