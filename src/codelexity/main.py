@@ -1,9 +1,11 @@
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from codelexity.calculations import analyze_package, shorten
-from codelexity.graph import create_graph, maintainability
+from codelexity.fte_calculations import maintenance_effort_ftes
+from codelexity.graph import coupling, create_graph, maintainability
 from codelexity.plot import create_viz
 
 HTML_NAME = "codelexity.html"
@@ -36,6 +38,22 @@ parser.add_argument(
     help="Provide a list of packages/modules to exclude.",
 )
 parser.add_argument("-a", "--absolute", action="store_true", help="If added all paths will be absolute.")
+parser.add_argument(
+    "--max",
+    nargs=2,
+    action="append",
+    default=[],
+    metavar=("KEY", "VALUE"),
+    help="Exit non-zero if this analytics value exceeds VALUE, e.g. `--max total_lines 500`. Repeatable.",
+)
+parser.add_argument(
+    "--min",
+    nargs=2,
+    action="append",
+    default=[],
+    metavar=("KEY", "VALUE"),
+    help="Exit non-zero if this analytics value falls below VALUE, e.g. `--min maintainability_index 40`. Repeatable.",
+)
 
 
 def main():
@@ -50,16 +68,23 @@ def main():
 
     # analyze code
     data = analyze_package(path, exclude=args.exclude, include_only=args.include_only)
-    G = create_graph(package_data=data)
-    maintainability_index = maintainability(G)
-    data["analytics"]["maintainability_index"] = maintainability_index
+    data["path"] = shorten(path, Path.cwd()) if not args.absolute else path.as_posix()
 
     if not args.absolute:
-        # Keys and imports shortened together — create_graph matches edges between the two.
         data["modules"] = {
             shorten(Path(mod), path): {**d, "imports": [shorten(Path(i), path) for i in d["imports"]]}
             for mod, d in data["modules"].items()
         }
+
+    G = create_graph(package_data=data)
+    maintainability_index = maintainability(G)
+    data["analytics"]["maintainability_index"] = maintainability_index
+    data["analytics"]["coupling_score"] = round(coupling(G, data), 3)
+    min_ftes, ftes, max_ftes = maintenance_effort_ftes(
+        data["analytics"]["total_lines"], score=data["analytics"]["coupling_score"]
+    )
+    data["analytics"]["maintenance_FTEs"] = ftes
+    data["analytics"]["maintenance_FTEs_range"] = (min_ftes, max_ftes)
 
     if args.plot:
         create_viz(data, G, HTML_NAME)
@@ -70,6 +95,26 @@ def main():
 
     if not (args.plot or args.json):
         print(data["analytics"])
+
+    error = check_thresholds(data["analytics"], args.max, args.min)
+    if error:
+        sys.exit(error)
+
+
+def check_thresholds(analytics: dict, max_args: list, min_args: list) -> str:
+    """Return an error message if any analytics value breaks a --max/--min bound, else "" ."""
+    error = ""
+    for limit, bounds in [("max", max_args), ("min", min_args)]:
+        for key, value in bounds:
+            key_ = key if key in analytics else key.replace("-", "_")
+            if key_ not in analytics:
+                print(f"skipping {key_}")
+                continue
+            if limit == "max" and analytics[key_] > float(value):
+                error += f"{key} {analytics[key_]} exceeds the maximum allowed value of {value}\n"
+            elif limit == "min" and analytics[key_] < float(value):
+                error += f"{key} {analytics[key_]} is below the minimum allowed value of {value}\n"
+    return error
 
 
 if __name__ == "__main__":

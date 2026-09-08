@@ -14,3 +14,10 @@ name = "Ruff Format"
 entry = "ruff format"
 language = "system"
 types = ["python"]
+
+[[repos.hooks]]
+id = "codelexity"
+name = "Codelexity maintainability"
+entry = "uv run codelexity src -i codelexity --min maintainability_index 40.0"
+language = "system"
+pass_filenames = false

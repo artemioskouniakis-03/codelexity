@@ -1,9 +1,20 @@
 # Changelog
 
+## 0.4.1 — 2026-09-07
+
+- Fixing bug with relative paths
+- Fixing COCOMO bug
+
+## 0.4.0 — 2026-09-07
+
+- Added coupling calculations using `nx.descendants`
+- Added FTE effort estimation using COCOMO
+- Added a `--min` and `--max` flag to add to pre-commit hooks
+
 ## 0.3.0 — 2026-09-04
 
-Separated graph construction from plotting.
-Added Maintainability Index in the 'analytics'
+- Separated graph construction from plotting.
+- Added Maintainability Index in the 'analytics'
 
 ## 0.2.5 — 2026-08-25
 

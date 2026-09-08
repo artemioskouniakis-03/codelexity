@@ -20,7 +20,7 @@ from codelexity.calculations import (
     normalized_path_list,
     shorten,
 )
-from codelexity.graph import MI_BANDS, create_graph, maintainability, mi_color
+from codelexity.graph import MI_BANDS, coupling, create_graph, maintainability, mi_color
 from codelexity.halstead import halstead_metrics, operators_and_operands
 
 SAMPLE = Path(__file__).with_name("test_module.py").read_text()
@@ -210,6 +210,34 @@ class TestGraphMetrics(unittest.TestCase):
 
     def test_maintainability_of_empty_graph(self):
         self.assertEqual(maintainability(nx.DiGraph()), 0)
+
+    def _chain(self, *code_lengths):
+        # A.py <- B.py <- C.py ... (each imports the previous one)
+        names = [f"{chr(65 + i)}.py" for i in range(len(code_lengths))]
+        modules = {
+            name: {
+                "imports": [names[i - 1]] if i > 0 else [],
+                "total_lines": code_lengths[i],
+                "code_length": code_lengths[i],
+                "maintainability_index": 50.0,
+            }
+            for i, name in enumerate(names)
+        }
+        return {"modules": modules}
+
+    def test_coupling_chain_matches_hand_computed_value(self):
+        # A ripples into B and C (2/3 of the other lines), B ripples into C (1/3), C ripples into nothing.
+        data = self._chain(100, 100, 100)
+        G = create_graph(data)
+        self.assertAlmostEqual(coupling(G, data), 1 / 3)
+
+    def test_coupling_of_isolated_module_is_zero(self):
+        data = self._chain(100)
+        G = create_graph(data)
+        self.assertEqual(coupling(G, data), 0.0)
+
+    def test_coupling_of_empty_package_is_zero(self):
+        self.assertEqual(coupling(nx.DiGraph(), {"modules": {}}), 0.0)
 
 
 if __name__ == "__main__":
