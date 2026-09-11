@@ -46,3 +46,15 @@ def maintainability(G, damping=0.25):
     weights = {n: v / sum(weights.values()) for n, v in weights.items()}
     adjusted_m = [G.nodes[n]["maintainability"] * weights[n] for n in G.nodes]
     return round(sum(adjusted_m), 1)
+
+
+def coupling(G, package_data):
+    """0-1 Average fraction of the codebase's lines that transitively depend on a single module."""
+    modules = package_data["modules"]
+    total_lines = sum(d["code_length"] for d in modules.values())
+    if total_lines == 0:
+        return 0.0
+    reach_fractions = [
+        sum(modules[m]["code_length"] for m in nx.descendants(G, module)) / total_lines for module in modules
+    ]
+    return sum(reach_fractions) / len(reach_fractions)

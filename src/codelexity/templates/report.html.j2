@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Codelexity Report</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1, h2, h3 { margin-bottom: 0.3rem; }
+  h3.level-header { margin-top: 1.2rem; color: #444; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+  .stars { color: #d9a441; font-size: 1.6rem; letter-spacing: 2px; }
+  .card { border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; margin: 10px 0; }
+  .band-bar { display: flex; height: 10px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .band-low { background: #6cc06c; }
+  .band-medium { background: #e0d15a; }
+  .band-high { background: #e0965a; }
+  .band-very_high { background: #d05151; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  td, th { border: 1px solid #ddd; padding: 4px 8px; text-align: left; font-size: 0.85rem; }
+  .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 2px 8px; font-size: 0.85rem; }
+  footer { font-size: 0.8rem; color: #666; margin-top: 2rem; }
+  .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; gap: 12px; }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-row .name { flex: 1 1 auto; }
+  .metric-row .stars { font-size: 1rem; }
+  .dl-btn { cursor: pointer; border: 1px solid #ccc; background: #f7f7f7; border-radius: 4px; padding: 4px 10px; font: inherit; font-size: 0.8rem; }
+  .dl-btn:hover { background: #eee; }
+  #mynetwork { border: 1px solid #ddd; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 0.8rem; }
+  .legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+</style>
+{{ graph_head|safe }}
+</head>
+<body>
+
+<header>
+  <h1>Codelexity Report</h1>
+  <p>Repository: <code>{{ repo_path }}</code><br>
+     Generated: {{ generated_at }}<br>
+     COCOMO project type: {{ cocomo.project_type }}</p>
+</header>
+
+<script>
+  const FINDINGS = {{ findings|tojson_script }};
+
+  function toCSV(rows) {
+    if (!rows.length) return "";
+    const headers = Object.keys(rows[0]);
+    const escape = (v) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+    return [headers.join(",")].concat(rows.map((r) => headers.map((h) => escape(r[h])).join(","))).join("\n");
+  }
+
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function downloadFindingsCSV(metric) {
+    const rows = FINDINGS[metric] || [];
+    downloadBlob(toCSV(rows), metric.replace(/\s+/g, "_") + "_findings.csv", "text/csv");
+  }
+
+  function downloadAllFindingsXlsx() {
+    const wb = XLSX.utils.book_new();
+    for (const [metric, rows] of Object.entries(FINDINGS)) {
+      const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
+      XLSX.utils.book_append_sheet(wb, sheet, metric.substring(0, 31));
+    }
+    XLSX.writeFile(wb, "codelexity_findings.xlsx");
+  }
+</script>
+
+<section class="card">
+  <h2>Overall Score</h2>
+  <div class="stars">{{ "★" * scores.overall_stars }}{{ "☆" * (5 - scores.overall_stars) }}</div>
+  <p>Raw score: {{ "%.2f"|format(scores.overall_raw) }} / 5.5
+     &mdash; weighted average of all six metrics below, grouped by level.</p>
+  <button class="dl-btn" onclick="downloadAllFindingsXlsx()">Download all findings (Excel, one tab per metric)</button>
+
+  {% for level_name, metrics in metric_levels %}
+  <h3 class="level-header">{{ level_name }}</h3>
+  {% for label, score, description in metrics %}
+  <div class="metric-row">
+    <div class="name"><strong>{{ label }}</strong>{% if label == "Volume" %} <span class="badge">{{ volume_label }}</span>{% endif %}<br>
+      <span style="font-size:0.8rem;color:#666;">{{ description }}</span></div>
+    {% if score is none %}
+    <div class="stars">{{ "★" * scores.volume_stars }}{{ "☆" * (5 - scores.volume_stars) }} <span style="font-size:0.7rem;color:#666;">({{ "%.2f"|format(scores.volume_raw) }})</span><br>
+      <span style="font-size:0.7rem;color:#666;">{{ analysis.total_loc }} LOC ({{ kloc }} KLOC)</span></div>
+    {% else %}
+    <div class="stars">{{ "★" * score.stars }}{{ "☆" * (5 - score.stars) }} <span style="font-size:0.7rem;color:#666;">({{ "%.2f"|format(score.raw_score) }})</span></div>
+    {% endif %}
+    <button class="dl-btn" onclick="downloadFindingsCSV('{{ label }}')">Download findings</button>
+  </div>
+  {% endfor %}
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Per-metric Breakdown</h2>
+  {% for level_name, metrics in metric_levels %}
+  <h3 class="level-header">{{ level_name }}</h3>
+  {% for label, score, description in metrics %}
+  {% if score is not none %}
+  <div class="card">
+    <h3>{{ label }} <span class="stars" style="font-size:1rem;">{{ "★" * score.stars }}{{ "☆" * (5 - score.stars) }}</span></h3>
+    <p>{{ "%.1f"|format(score.severity_pct) }}% of code in Very-High/High risk-weighted severity (raw score {{ "%.2f"|format(score.raw_score) }})</p>
+    <div class="band-bar">
+      {% for band, pct in score.band_distribution.items() %}
+      <div class="band-{{ band }}" style="width: {{ pct }}%;" title="{{ band }}: {{ '%.1f'|format(pct) }}%"></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <h3>{{ label }} <span class="badge">{{ volume_label }}</span> <span class="stars" style="font-size:1rem;">{{ "★" * scores.volume_stars }}{{ "☆" * (5 - scores.volume_stars) }}</span></h3>
+    <p>{{ analysis.total_loc }} LOC ({{ kloc }} KLOC) - {{ description }}</p>
+  </div>
+  {% endif %}
+  {% endfor %}
+  {% endfor %}
+</section>
+
+<section class="card">
+  <h2>Cost &amp; Effort Estimate (COCOMO)</h2>
+  <p>Project type: <strong>{{ cocomo.project_type }}</strong> <span style="font-size:0.8rem;color:#666;">(derived automatically from codebase size - {{ kloc }} KLOC - not user-selected)</span></p>
+  <p>Effort: {{ cocomo.effort_pm }} person-months</p>
+  <p>Schedule: {{ cocomo.schedule_months }} months</p>
+  <p>Implied headcount: {{ cocomo.headcount }}</p>
+  <p><em>Rough order-of-magnitude estimate, not a committed plan. The Volume star rating above
+  is also size-derived, informed by this same COCOMO premise that effort scales
+  super-linearly with codebase size - bigger isn't inherently worse quality, but it is
+  more effort to build and maintain.</em></p>
+</section>
+
+<section>
+  <h2>Dependency Graph</h2>
+  {{ graph_body|safe }}
+  {% if graph_legend %}
+  <p style="font-size:0.8rem;color:#666;margin-top:6px;">Node color = component:</p>
+  <div class="legend">
+    {% for component, color in graph_legend %}
+    <span><span class="swatch" style="background:{{ color }};"></span>{{ component }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Scores by Technology</h2>
+  {% if language_scores %}
+  <div class="card">
+    {% for lang, ls in language_scores.items() %}
+    <div class="metric-row">
+      <div class="name"><strong>{{ lang }}</strong><br>
+        <span style="font-size:0.8rem;color:#666;">{{ ls.total_loc }} LOC</span></div>
+      <div class="stars">{{ "★" * ls.overall_stars }}{{ "☆" * (5 - ls.overall_stars) }} <span style="font-size:0.7rem;color:#666;">({{ "%.2f"|format(ls.overall_raw) }})</span></div>
+    </div>
+    <details style="margin:4px 0 10px 0;">
+      <summary style="font-size:0.8rem;color:#666;">Breakdown</summary>
+      <table>
+        <tr><th>Metric</th><th>Stars</th><th>Raw</th></tr>
+        <tr><td>Volume</td><td>{{ "★" * ls.volume_stars }}{{ "☆" * (5 - ls.volume_stars) }}</td><td>{{ "%.2f"|format(ls.volume_raw) }}</td></tr>
+        <tr><td>Duplication</td><td>{{ "★" * ls.duplication.stars }}{{ "☆" * (5 - ls.duplication.stars) }}</td><td>{{ "%.2f"|format(ls.duplication.raw_score) }}</td></tr>
+        <tr><td>Unit Size</td><td>{{ "★" * ls.unit_size.stars }}{{ "☆" * (5 - ls.unit_size.stars) }}</td><td>{{ "%.2f"|format(ls.unit_size.raw_score) }}</td></tr>
+        <tr><td>Unit Complexity</td><td>{{ "★" * ls.unit_complexity.stars }}{{ "☆" * (5 - ls.unit_complexity.stars) }}</td><td>{{ "%.2f"|format(ls.unit_complexity.raw_score) }}</td></tr>
+        <tr><td>Module Coupling</td><td>{{ "★" * ls.module_coupling.stars }}{{ "☆" * (5 - ls.module_coupling.stars) }}</td><td>{{ "%.2f"|format(ls.module_coupling.raw_score) }}</td></tr>
+      </table>
+    </details>
+    {% endfor %}
+  </div>
+  <p style="font-size:0.8rem;color:#666;">Component Independence isn't shown per technology - a component can mix
+  languages, so that metric doesn't decompose per language. The other five metrics are equally weighted
+  (0.2 each) for each technology's own score.</p>
+  {% else %}
+  <p>No per-file language data available.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Drill-down</h2>
+  <details>
+    <summary>Components ({{ analysis.components|length }})</summary>
+    <table>
+      <tr><th>Component</th><th>LOC</th><th>Files</th><th>Independence</th></tr>
+      {% for c in analysis.components %}
+      <tr><td>{{ c.name }}</td><td>{{ c.loc }}</td><td>{{ c.file_count }}</td><td>{{ "%.2f"|format(c.independence_score) }}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+  <details>
+    <summary>Files ({{ analysis.files|length }})</summary>
+    <table>
+      <tr><th>File</th><th>Language</th><th>LOC</th><th>Incoming refs</th><th>Duplicate LOC</th></tr>
+      {% for f in analysis.files %}
+      <tr><td>{{ f.file }}</td><td>{{ f.language }}</td><td>{{ f.loc }}</td><td>{{ f.incoming_references }}</td><td>{{ f.duplicate_loc }}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+</section>
+
+<footer>
+  <p><strong>Methodology.</strong> Metrics are grouped into three levels, each contributing equally
+  to the overall score (1/3 per level, split evenly between its two metrics - 1/6 each):
+  <strong>System Level</strong> (Volume, Duplication), <strong>Unit Level</strong> (Unit Size, Unit
+  Complexity), <strong>Architecture Level</strong> (Module Coupling, Component Independence).</p>
+  <p>Unit Size (LOC): 1-15 Low, 16-30 Medium, 31-60 High, 61+ Very High.
+  Unit Complexity (McCabe): 1-5 Low, 6-10 Medium, 11-25 High, 26+ Very High.
+  Module Coupling (incoming refs): 0-10 Low, 11-20 Medium, 21-50 High, 51+ Very High.
+  Duplication and Component Independence bands are proposed heuristics (modeled on SonarQube's
+  duplication convention and an 80%-cohesion rule of thumb, respectively), not user-specified.
+  Each metric's raw score (0.5-5.5) is a piecewise-linear mapping of the LOC-weighted % of code
+  in each risk band. Volume's star rating (KLOC): &le;10 Very Small (5&#9733;), &le;50 Small
+  (4&#9733;), &le;300 Medium (3&#9733;), &le;1000 Large (2&#9733;), 1000+ Very Large (1&#9733;)
+  - and the COCOMO project type above uses the same KLOC value (&le;50 organic, &le;300
+  semi-detached, 300+ embedded) rather than a user selection.</p>
+  <p>Duplication findings share a <code>clone_id</code> across the two rows that make up one
+  detected clone pair - filter or sort by it to see both locations of the same duplicate.</p>
+  <p>Test files (tests/, test/, __tests__/, spec/, specs/, mocks/, __mocks__/, fixtures/ path
+  segments) were {{ "excluded from" if exclude_tests else "included in" }} this analysis.</p>
+  {% if analysis.unparsed_files %}<p>{{ analysis.unparsed_files|length }} file(s) had parse errors; their results may be incomplete.</p>{% endif %}
+  {% if analysis.unsupported_files %}<p>{{ analysis.unsupported_files|length }} file(s) had no supported language analyzer and were excluded from all metrics.</p>{% endif %}
+  {% if analysis.skipped_large_files %}<p>{{ analysis.skipped_large_files|length }} file(s) exceeded the size cap and were skipped entirely (never read or parsed) - typically generated/bundled build output, e.g. minified JS.</p>{% endif %}
+</footer>
+
+</body>
+</html>

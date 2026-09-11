@@ -1,6 +1,6 @@
 [project]
 name = "codelexity"
-version = "0.3.0"
+version = "0.4.1"
 description = "A package that measures code complexity in the age of AI slop."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,6 +25,34 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
+[project.optional-dependencies]
+# Multi-language parsing (tree-sitter). Optional: the base install stays networkx+pyvis
+# only, and grammar packages ship native wheels per-platform - users who only analyze
+# Python shouldn't pay that install cost. Each grammar import is guarded, so codelexity
+# always imports fine without this extra; unsupported languages just land in
+# AnalysisResult.unsupported_files.
+multi-lang = [
+    "tree-sitter>=0.23,<0.26",
+    "tree-sitter-python>=0.23,<0.26",
+    "tree-sitter-javascript>=0.23,<0.26",
+    "tree-sitter-typescript>=0.23,<0.26",
+    "tree-sitter-java>=0.23,<0.26",
+    "tree-sitter-c-sharp>=0.23,<0.26",
+]
+# Streamlit trigger UI + Jinja2-templated HTML report. Optional: the CLI/library use
+# case has zero UI dependencies today and shouldn't be forced to pull in Streamlit's
+# dependency tree.
+ui = [
+    "streamlit>=1.38",
+    "jinja2>=3.1",
+]
+# Headless CI usage (codelexity-ci) needs the Jinja2-templated HTML report but not
+# Streamlit - kept as its own extra so `pip install codelexity[multi-lang,ci]` in a
+# GitHub Actions runner doesn't pull in a browser UI dependency it will never use.
+ci = [
+    "jinja2>=3.1",
+]
+
 [project.urls]
 Homepage = "https://github.com/nickgiki/codelexity"
 Issues = "https://github.com/nickgiki/codelexity/issues"
@@ -32,6 +60,7 @@ Changelog = "https://github.com/nickgiki/codelexity/blob/main/CHANGELOG.md"
 
 [project.scripts]
 codelexity = "codelexity.main:main"
+codelexity-ci = "codelexity.ci:main"
 
 [tool.uv.sources]
 codelexity = { path = "src", editable = true }
@@ -48,7 +77,7 @@ dev = [
 ]
 
 [tool.bumpver]
-current_version = "0.3.0"
+current_version = "0.4.1"
 version_pattern = "MAJOR.MINOR.PATCH"
 push = false  # inspect the tag before it leaves the machine
 

@@ -3,7 +3,7 @@
 # `Codelexity`
 
 ![version](https://img.shields.io/pypi/v/codelexity)
-![coverage](https://img.shields.io/badge/coverage-75%25-green)
+![coverage](https://img.shields.io/badge/coverage-84%25-green)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
 A python package that helps you measure, visualize and ultimately manage code complexity.
@@ -26,6 +26,67 @@ _Codelexity HTML report on the `codelexity` repo_
 uvx --python 3.11 codelexity <my-package-path>
 ```
 
+## Multi-language scoring, COCOMO & the Streamlit UI
+
+Beyond the CLI above, `codelexity` also ships an additive analysis pipeline covering
+Duplication, Unit Size, Unit Complexity, Module Coupling, Component Independence and Volume
+across Python, C#, Java, JavaScript, TypeScript, React and Angular, a star-rating quality
+score, a COCOMO effort estimate, and a lightweight Streamlit UI that generates an HTML
+report. Install the extra dependencies with `uv sync --extra multi-lang --extra ui`, then
+run `uv run streamlit run src/codelexity/app.py`.
+
+### Running with Docker
+
+A `Dockerfile` and `docker-compose.yml` are included so you can build and run the Streamlit
+UI locally without installing Python or `uv` yourself.
+
+```bash
+# Build and start the UI, analyzing the current directory by default:
+docker compose up --build
+
+# Analyze a different local folder instead - set REPO_PATH before starting:
+REPO_PATH=/path/to/your/repo docker compose up --build
+```
+
+> [!NOTE]
+> On Windows PowerShell, set the variable first: `$env:REPO_PATH="C:\path\to\your\repo"; docker compose up --build`.
+> You can also create a `.env` file next to `docker-compose.yml` containing `REPO_PATH=/path/to/your/repo`
+> instead of setting it inline each time.
+
+The folder at `REPO_PATH` is bind-mounted read-only into the container at `/workspace`, and
+the Streamlit UI's "Repository path" field defaults to it automatically. Once running, open
+<http://localhost:8501> in your browser.
+
+> [!WARNING]
+> **On Windows, prefer running natively for large local repositories.** Docker Desktop's
+> Windows bind mount has significant per-file I/O overhead - on a real ~2,000-file monorepo,
+> a run that took ~47 seconds natively took several minutes longer through the bind mount,
+> purely from the filesystem access pattern (directory walks, file reads, import resolution)
+> crossing the Windows/container boundary. This is specific to Docker Desktop on Windows;
+> it isn't a concern on Linux hosts or in CI (see below), where Docker has no such penalty.
+>
+> To run natively instead (same UI, same code, just reading your filesystem directly):
+> ```bash
+> uv sync --extra multi-lang --extra ui
+> uv run streamlit run src/codelexity/app.py
+> ```
+> Keep Docker for CI, for sharing the tool with someone without a Python/`uv` setup, or when
+> running on Linux/macOS, where it's the more convenient option with no performance downside.
+
+## Continuous Integration
+
+For a headless, CI-friendly check that fails a build below a quality threshold, use the
+`codelexity-ci` command instead of the Streamlit UI:
+
+```bash
+pip install "codelexity[multi-lang,ci]"
+codelexity-ci . --min-stars 3.0 --report codelexity_report.html --json codelexity_summary.json
+```
+
+It exits non-zero when the overall score is below `--min-stars` (default `3.0`). See
+[`.github/workflows/codelexity-quality.yml`](.github/workflows/codelexity-quality.yml) for a
+working GitHub Actions example that runs this on every pull request and uploads the report
+and JSON summary as build artifacts.
 
 ## Intuition
 
@@ -70,6 +131,21 @@ It is easy to understand that a densly connected dependency graph affects the ma
 
 To measure centrality, `codelexity` uses [Katz centrality](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.katz_centrality.html). The centrality value is then multiplied by the module length and normalized by the sum of the respective value in all modules. The corresponding value is used as a weight to compute the total Maintainability Index.
 
+### Maintenance effort estimation
+
+To measure the effort needed (in FTEs), `codelexity` usese the [COCOMO model](https://boehmcsse.org/tools/cocomo-models/). The calculations produce a range ($min$, $max$) according to the basic COCOMO coefficients $a$ and $b$ (with $min$ the coefficients for organic projects where $a=2.4$ and $b=1.05$, and max those for "embedded" projects where $a=3.6$ and $b=1.20$).
+
+$$ E = a \times KLOC^{b}$$
+
+where:
+
+- $a$, $b$ coefficients
+- $KLOC$ the annual size of the codebase changed in thousands of lines (assumed around 10% for maintenance)
+- $E$ the effort in people months
+
+The point estimate uses [coupling](https://en.wikipedia.org/wiki/Coupling_(computer_programming)) to estimate how close the project is to the minimum or the maximum of the range.
+
+
 ### Example - NetworkX
 
 This is a result for the [`networkx` library](https://networkx.org/en/), a large and complex repo. The command used to create the analysis was:
@@ -107,3 +183,20 @@ The `codelexity.json` containts aggregate analytics for the whole package and pe
 ...
         }
 ```
+
+## Using `codelexity` as a pre-commit hook
+
+This project can be used a pre-commit hook to minimize the AI-slop complexifying your codebase. This repo uses [`prek`](https://github.com/j178/prek) (a faster, Rust rewrite of `pre-commit`), configured in `prek.toml`:
+
+```toml
+[[repos.hooks]]
+id = "codelexity"
+name = "Codelexity maintainability"
+entry = "uv run codelexity src -i codelexity --min maintainability_index 40.0"
+language = "system"
+pass_filenames = false
+```
+
+`--min KEY VALUE` and `--max KEY VALUE` are repeatable, and work against any key in the `analytics` block — `maintainability_index`, `total_lines`, `coupling_score`, whatever you care about. The moment one is violated, `codelexity` prints why and exits non-zero, which blocks the commit. A few notes if you're wiring this up yourself:
+- Point `codelexity` at your package (not the whole repo) with the path argument, and narrow it further with `-i` if the analyzed path still picks up things you don't want counted.
+- The same flags work outside of hooks too, e.g. as a CI gate: `codelexity src --min maintainability_index 40 --max total_lines 50000`.
