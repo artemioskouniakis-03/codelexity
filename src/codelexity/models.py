@@ -50,7 +50,7 @@ class DuplicateBlock:
     lines_a: tuple[int, int]
     file_b: str
     lines_b: tuple[int, int]
-    token_length: int
+    line_length: int
 
 
 @dataclass(frozen=True, slots=True)

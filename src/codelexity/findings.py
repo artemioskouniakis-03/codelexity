@@ -53,7 +53,7 @@ def duplication_findings(analysis: AnalysisResult) -> list[dict]:
                 "file": b.file_a,
                 "start_line": b.lines_a[0],
                 "end_line": b.lines_a[1],
-                "token_length": b.token_length,
+                "line_length": b.line_length,
             }
         )
         rows.append(
@@ -62,7 +62,7 @@ def duplication_findings(analysis: AnalysisResult) -> list[dict]:
                 "file": b.file_b,
                 "start_line": b.lines_b[0],
                 "end_line": b.lines_b[1],
-                "token_length": b.token_length,
+                "line_length": b.line_length,
             }
         )
     return rows

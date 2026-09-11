@@ -38,7 +38,7 @@ def _analysis() -> AnalysisResult:
         ),
     )
     duplicate_blocks = (
-        DuplicateBlock(file_a="a.py", lines_a=(1, 5), file_b="b.py", lines_b=(10, 14), token_length=60),
+        DuplicateBlock(file_a="a.py", lines_a=(1, 5), file_b="b.py", lines_b=(10, 14), line_length=60),
     )
     return AnalysisResult(
         total_loc=70,
@@ -84,7 +84,7 @@ class TestFindings(unittest.TestCase):
         self.assertEqual(len(rows), 2)  # one row per side of the one clone block
         self.assertEqual(rows[0]["clone_id"], rows[1]["clone_id"])
         self.assertEqual({r["file"] for r in rows}, {"a.py", "b.py"})
-        self.assertEqual(rows[0]["token_length"], 60)
+        self.assertEqual(rows[0]["line_length"], 60)
 
 
 if __name__ == "__main__":
