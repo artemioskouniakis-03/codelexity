@@ -7,7 +7,7 @@ from pathlib import Path
 from codelexity.calculations import is_valid
 from codelexity.components import component_edges, group_files_by_component, independence
 from codelexity.coupling import module_coupling, resolve_edges
-from codelexity.duplication import DEFAULT_MIN_TOKENS, duplicate_loc_per_file, find_duplicate_blocks, tokenize
+from codelexity.duplication import DEFAULT_MIN_LINES, duplicate_loc_per_file, find_duplicate_blocks, tokenize
 from codelexity.languages import analyzer_for
 from codelexity.languages.csharp_lang import CSharpAnalyzer
 from codelexity.models import AnalysisResult, ComponentMetric, DuplicateBlock, FileMetric, Language, UnitMetric
@@ -69,7 +69,7 @@ def analyze_package_multi_lang(
     path: str | Path,
     *,
     component_depth: int = 1,
-    duplication_min_tokens: int = DEFAULT_MIN_TOKENS,
+    duplication_min_lines: int = DEFAULT_MIN_LINES,
     exclude: tuple[str, ...] = (),
     include_only: tuple[str, ...] = (),
     languages: tuple[str, ...] = (),
@@ -183,9 +183,9 @@ def analyze_package_multi_lang(
     ce, ca = component_edges(resolved_edges, component_of)
 
     logger.info(
-        "Scanning for duplicate code across %d files (min_tokens=%d)...", len(file_tokens), duplication_min_tokens
+        "Scanning for duplicate code across %d files (min_lines=%d)...", len(file_tokens), duplication_min_lines
     )
-    duplicate_blocks_raw = find_duplicate_blocks(file_tokens, min_tokens=duplication_min_tokens)
+    duplicate_blocks_raw = find_duplicate_blocks(file_tokens, min_lines=duplication_min_lines)
     covered_lines = duplicate_loc_per_file(duplicate_blocks_raw)
     logger.info("Found %d duplicate block(s)", len(duplicate_blocks_raw))
 
@@ -224,7 +224,7 @@ def analyze_package_multi_lang(
             lines_a=b.lines_a,
             file_b=b.file_b,
             lines_b=b.lines_b,
-            token_length=b.token_length,
+            line_length=b.line_length,
         )
         for b in duplicate_blocks_raw
     )

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from codelexity.languages.base import LanguageAnalyzer, walk_leaves
 
-DEFAULT_MIN_TOKENS = 50
+DEFAULT_MIN_LINES = 7
 
 # A bucket this large is essentially always boilerplate (license headers, generated
 # scaffolding, a common import block) rather than meaningful duplication - verifying it
@@ -47,7 +47,13 @@ class CloneRegion:
     lines_a: tuple[int, int]
     file_b: str
     lines_b: tuple[int, int]
-    token_length: int
+    line_length: int
+
+
+@dataclass(frozen=True, slots=True)
+class LineSignature:
+    line: int  # 1-indexed source line number
+    signature: tuple[str, ...]  # normalized tokens starting on this line
 
 
 def tokenize(tree, source: bytes, analyzer: LanguageAnalyzer) -> list[Token]:
@@ -67,6 +73,17 @@ def tokenize(tree, source: bytes, analyzer: LanguageAnalyzer) -> list[Token]:
         line = source.count(b"\n", 0, leaf.start_byte) + 1
         tokens.append(Token(normalized=norm, line=line))
     return tokens
+
+
+def _line_signatures(tokens: list[Token]) -> list[LineSignature]:
+    """Groups tokens by source line, producing one LineSignature per line that carries at
+    least one token. Blank lines and comment-only lines are skipped entirely - they carry
+    no code that could be duplicated, so the returned sequence only advances over
+    countable lines, making `min_lines` mean "N consecutive lines of actual code"."""
+    by_line: dict[int, list[str]] = defaultdict(list)
+    for t in tokens:
+        by_line[t.line].append(t.normalized)
+    return [LineSignature(line=line, signature=tuple(by_line[line])) for line in sorted(by_line)]
 
 
 def _rolling_hashes(ids: list[int], size: int) -> list[int]:
@@ -94,25 +111,29 @@ def _rolling_hashes(ids: list[int], size: int) -> list[int]:
 
 def find_duplicate_blocks(
     file_tokens: dict[str, list[Token]],
-    min_tokens: int = DEFAULT_MIN_TOKENS,
+    min_lines: int = DEFAULT_MIN_LINES,
 ) -> list[CloneRegion]:
-    """Token-shingling clone detection (PMD-CPD/jscpd style): hash a sliding window of
-    normalized tokens per file, verify hash-bucket collisions token-for-token, and merge
-    overlapping matches between the same file pair into one region."""
-    token_id: dict[str, int] = {}
+    """Line-shingling clone detection (PMD-CPD/jscpd style): hash a sliding window of
+    normalized per-line signatures per file, verify hash-bucket collisions line-for-line,
+    and merge overlapping matches between the same file pair into one region. Two lines
+    only share an id when their full tuple of normalized tokens matches exactly, so a
+    match is always a byte-for-byte (post-normalization) duplicate, never a fuzzy one."""
+    lines_by_file: dict[str, list[LineSignature]] = {file: _line_signatures(tokens) for file, tokens in file_tokens.items()}
+
+    line_id: dict[tuple[str, ...], int] = {}
     ids_by_file: dict[str, list[int]] = {}
-    for file, tokens in file_tokens.items():
+    for file, lines in lines_by_file.items():
         ids = []
-        for t in tokens:
-            i = token_id.get(t.normalized)
+        for ls in lines:
+            i = line_id.get(ls.signature)
             if i is None:
-                i = token_id[t.normalized] = len(token_id)
+                i = line_id[ls.signature] = len(line_id)
             ids.append(i)
         ids_by_file[file] = ids
 
     buckets: dict[int, list[tuple[str, int]]] = defaultdict(list)
     for file, ids in ids_by_file.items():
-        for start, h in enumerate(_rolling_hashes(ids, min_tokens)):
+        for start, h in enumerate(_rolling_hashes(ids, min_lines)):
             buckets[h].append((file, start))
 
     raw_matches: list[tuple[str, int, str, int]] = []
@@ -125,17 +146,17 @@ def find_duplicate_blocks(
                 file_b, start_b = occurrences[j]
                 if file_a == file_b and start_a == start_b:
                     continue
-                ids_a = ids_by_file[file_a][start_a : start_a + min_tokens]
-                ids_b = ids_by_file[file_b][start_b : start_b + min_tokens]
+                ids_a = ids_by_file[file_a][start_a : start_a + min_lines]
+                ids_b = ids_by_file[file_b][start_b : start_b + min_lines]
                 if ids_a == ids_b:  # verifies the hash match - rolling hash collisions are possible
                     raw_matches.append((file_a, start_a, file_b, start_b))
 
-    # Grow each match forward token-by-token while both streams keep agreeing, then dedupe
+    # Grow each match forward line-by-line while both streams keep agreeing, then dedupe
     # matches that are subsumed by a longer, already-grown match starting at/before them.
     grown: list[tuple[str, int, str, int, int]] = []
     for file_a, start_a, file_b, start_b in raw_matches:
         ids_a, ids_b = ids_by_file[file_a], ids_by_file[file_b]
-        length = min_tokens
+        length = min_lines
         while (
             start_a + length < len(ids_a)
             and start_b + length < len(ids_b)
@@ -164,16 +185,16 @@ def find_duplicate_blocks(
 
     regions = []
     for file_a, start_a, file_b, start_b, length in kept:
-        tokens_a, tokens_b = file_tokens[file_a], file_tokens[file_b]
-        end_line_a = tokens_a[min(start_a + length - 1, len(tokens_a) - 1)].line
-        end_line_b = tokens_b[min(start_b + length - 1, len(tokens_b) - 1)].line
+        lines_a, lines_b = lines_by_file[file_a], lines_by_file[file_b]
+        end_line_a = lines_a[min(start_a + length - 1, len(lines_a) - 1)].line
+        end_line_b = lines_b[min(start_b + length - 1, len(lines_b) - 1)].line
         regions.append(
             CloneRegion(
                 file_a=file_a,
-                lines_a=(tokens_a[start_a].line, end_line_a),
+                lines_a=(lines_a[start_a].line, end_line_a),
                 file_b=file_b,
-                lines_b=(tokens_b[start_b].line, end_line_b),
-                token_length=length,
+                lines_b=(lines_b[start_b].line, end_line_b),
+                line_length=length,
             )
         )
     return regions
